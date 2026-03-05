@@ -1,0 +1,496 @@
+const { supabase } = require('../config/supabase');
+
+class HeatMapService {
+  constructor() {
+    // Initialize status change cache
+    this.statusChangeCache = new Map();
+    this.lastStatusCheck = new Date();
+    
+    // Test connection on initialization
+    this.testConnection();
+  }
+
+  /**
+   * Test database connection
+   */
+  async testConnection() {
+    try {
+      const { data, error } = await supabase
+        .from('complaints')
+        .select('id')
+        .limit(1);
+      
+      if (error) {
+        console.log('🔗 Database connection test failed, will use mock data');
+        this.useOnlyMockData = true;
+      } else {
+        console.log('✅ Database connection successful');
+        this.useOnlyMockData = false;
+      }
+    } catch (err) {
+      console.log('🔗 Database connection error, using mock data:', err.message);
+      this.useOnlyMockData = true;
+    }
+  }
+
+  /**
+   * Get all complaints for heat map visualization
+   * Returns complaints with their coordinates and status
+   */
+  async getComplaintHeatMapData(filters = {}) {
+    try {
+      console.log('🗺️ Fetching complaint heat map data...');
+      
+      // No mock data - always try to use real database
+      console.log('📊 Using real data from database');
+
+      // First check for status changes
+      await this.checkForStatusChanges();
+
+      let query = supabase
+        .from('complaints')
+        .select(`
+          id,
+          location_latitude,
+          location_longitude,
+          status,
+          category,
+          priority_score,
+          created_at,
+          resolved_at,
+          location_address,
+          title,
+          description
+        `)
+        .not('location_latitude', 'is', null)
+        .not('location_longitude', 'is', null);
+
+      // Apply date filter (default to last 30 days)
+      if (filters.dateRange) {
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - (filters.dateRange || 30));
+        query = query.gte('created_at', startDate.toISOString());
+      }
+
+      // Apply status filter
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      }
+
+      // Apply complaint type filter
+      if (filters.complaintType) {
+        query = query.eq('category', filters.complaintType);
+      }
+
+      const { data: complaints, error } = await query.order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching complaints:', error);
+        throw new Error(`Database error: ${error.message}`);
+      }
+
+      // Return empty array if no complaints found - no mock data
+      if (!complaints || complaints.length === 0) {
+        console.log('⚠️ No complaints found in database');
+        return {
+          points: [],
+          statistics: {
+            total: 0,
+            resolved: 0,
+            active: 0,
+            pending: 0,
+            resolutionRate: 0,
+            averageResolutionDays: 0,
+            byType: {},
+            byPriority: {}
+          },
+          lastUpdated: new Date().toISOString(),
+          totalComplaints: 0,
+          mockData: false
+        };
+      }
+
+      console.log(`✅ Found ${complaints.length} complaints for heat map`);
+      return this.formatHeatMapData(complaints);
+
+    } catch (error) {
+      console.error('❌ Heat map service error:', error.message);
+      // Return empty data structure instead of mock data
+      return {
+        points: [],
+        statistics: {
+          total: 0,
+          resolved: 0,
+          active: 0,
+          pending: 0,
+          resolutionRate: 0,
+          averageResolutionDays: 0,
+          byType: {},
+          byPriority: {}
+        },
+        lastUpdated: new Date().toISOString(),
+        totalComplaints: 0,
+        mockData: false
+      };
+    }
+  }
+
+  /**
+   * Format complaint data for heat map visualization
+   */
+  formatHeatMapData(complaints) {
+    console.log(`🔄 Formatting ${complaints.length} complaints for heat map`);
+    
+    const heatMapPoints = complaints
+      .filter(complaint => 
+        // Filter out complaints without valid coordinates
+        complaint && 
+        complaint.location_latitude && 
+        complaint.location_longitude && 
+        !isNaN(parseFloat(complaint.location_latitude)) && 
+        !isNaN(parseFloat(complaint.location_longitude))
+      )
+      .map(complaint => {
+        // Check if we have a more recent status in cache
+        let status = complaint.status;
+        if (this.statusChangeCache && this.statusChangeCache.has(complaint.id)) {
+          const cachedStatus = this.statusChangeCache.get(complaint.id);
+          console.log(`📝 Using cached status for complaint ${complaint.id}: ${cachedStatus.status}`);
+          status = cachedStatus.status;
+        }
+        
+        const isResolved = status === 'completed' || status === 'resolved';
+        const isPending = status === 'pending' || status === 'in_progress';
+        
+        // Parse coordinates to ensure they're valid numbers
+        const lat = parseFloat(complaint.location_latitude);
+        const lng = parseFloat(complaint.location_longitude);
+        
+        // Compute complaint weight based on status and priority
+        const weight = this.getComplaintWeight(complaint);
+        
+        // Log the formatted point for debugging
+        console.log(`📍 Formatted point: id=${complaint.id}, lat=${lat}, lng=${lng}, weight=${weight}, status=${status}`);
+        
+        // Return both lat/lng and latitude/longitude for maximum compatibility
+        return {
+          id: complaint.id,
+          lat: lat,
+          lng: lng,
+          latitude: lat, // Add latitude for react-native-maps Heatmap component
+          longitude: lng, // Add longitude for react-native-maps Heatmap component
+          weight: this.getComplaintWeight(complaint),
+          status: status,
+          color: this.getStatusColor(status),
+          markerType: isResolved ? 'resolved' : isPending ? 'active' : 'pending',
+          complaintType: complaint.category,
+          priorityLevel: this.getPriorityLevel(complaint.priority_score),
+          priorityScore: complaint.priority_score || 0,
+          createdAt: complaint.created_at,
+          resolvedAt: isResolved ? (complaint.resolved_at || new Date().toISOString()) : null,
+          location: complaint.location_address || 'Location not specified',
+          daysSinceCreated: this.getDaysSince(complaint.created_at),
+          tooltip: this.generateTooltip({...complaint, status})
+        };
+      });
+
+    // Group data for statistics
+    const statistics = this.calculateHeatMapStatistics(heatMapPoints);
+
+    return {
+      points: heatMapPoints,
+      statistics,
+      lastUpdated: new Date().toISOString(),
+      totalComplaints: heatMapPoints.length
+    };
+  }
+
+  /**
+   * Get weight for heat map intensity based on priority and age
+   */
+  getComplaintWeight(complaint) {
+    let weight = 1;
+    
+    // Priority-based weight
+    if (complaint.priority_score >= 80) weight = 5;
+    else if (complaint.priority_score >= 60) weight = 4;
+    else if (complaint.priority_score >= 40) weight = 3;
+    else if (complaint.priority_score >= 20) weight = 2;
+    else weight = 1;
+
+    // Age-based multiplier (older unresolved complaints get higher weight)
+    const daysSince = this.getDaysSince(complaint.created_at);
+    if (complaint.status !== 'completed' && complaint.status !== 'resolved') {
+      if (daysSince > 7) weight *= 1.5;
+      if (daysSince > 14) weight *= 2;
+      if (daysSince > 30) weight *= 3;
+    }
+
+    return weight;
+  }
+
+  /**
+   * Get color based on complaint status
+   */
+  getStatusColor(status) {
+    const colorMap = {
+      'pending': '#FF4444',        // Red - New complaints
+      'in_progress': '#FF8800',    // Orange - Being worked on
+      'under_review': '#FFAA00',   // Yellow - Under review
+      'completed': '#00AA44',      // Green - Completed
+      'resolved': '#00CC44',       // Light Green - Resolved
+      'cancelled': '#888888',      // Gray - Cancelled
+      'rejected': '#CC0000'        // Dark Red - Rejected
+    };
+    return colorMap[status] || '#666666';
+  }
+
+  /**
+   * Calculate statistics for the heat map
+   */
+  calculateHeatMapStatistics(points) {
+    const total = points.length;
+    const resolved = points.filter(p => p.markerType === 'resolved').length;
+    const active = points.filter(p => p.markerType === 'active').length;
+    const pending = points.filter(p => p.markerType === 'pending').length;
+    
+    // Resolution rate (percentage of complaints resolved)
+    const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+    
+    // Group by complaint type
+    const byType = {};
+    points.forEach(point => {
+      const type = point.complaintType || 'unknown';
+      if (!byType[type]) byType[type] = 0;
+      byType[type]++;
+    });
+    
+    // Group by priority level
+    const byPriority = {};
+    points.forEach(point => {
+      const priority = point.priorityLevel || 'unknown';
+      if (!byPriority[priority]) byPriority[priority] = 0;
+      byPriority[priority]++;
+    });
+    
+    // Calculate average resolution time (for resolved complaints)
+    const averageResolutionDays = this.calculateAverageResolutionTime(points);
+    
+    // Oldest unresolved complaint
+    const oldestPending = this.getOldestPending(points);
+    
+    return {
+      total,
+      resolved,
+      active,
+      pending,
+      resolutionRate,
+      averageResolutionDays,
+      byType,
+      byPriority,
+      oldestPending
+    };
+  }
+
+  /**
+   * Get priority level from score
+   */
+  getPriorityLevel(priorityScore) {
+    if (!priorityScore || isNaN(parseInt(priorityScore))) return 'UNKNOWN';
+    const score = parseInt(priorityScore);
+    if (score >= 80) return 'CRITICAL';
+    if (score >= 60) return 'HIGH';
+    if (score >= 40) return 'MEDIUM';
+    if (score >= 20) return 'LOW';
+    return 'MINIMAL';
+  }
+
+  /**
+   * Generate tooltip for complaint marker
+   */
+  generateTooltip(complaint) {
+    const priorityLevel = this.getPriorityLevel(complaint.priority_score);
+    const daysSince = this.getDaysSince(complaint.created_at);
+    
+    return `${complaint.title || 'Untitled Complaint'}
+Status: ${complaint.status || 'Unknown'}
+Priority: ${priorityLevel} (${complaint.priority_score || 0})
+Days Since: ${daysSince}
+Location: ${complaint.location_address || 'Unknown'}`;
+  }
+
+  /**
+   * Calculate days since a date
+   */
+  getDaysSince(dateString) {
+    if (!dateString) return 0;
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now - date);
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /**
+   * Calculate average resolution time in days
+   */
+  calculateAverageResolutionTime(points) {
+    const resolvedPoints = points.filter(p => 
+      p.markerType === 'resolved' && p.createdAt && p.resolvedAt
+    );
+    
+    if (resolvedPoints.length === 0) return 0;
+    
+    const totalDays = resolvedPoints.reduce((sum, point) => {
+      const createdDate = new Date(point.createdAt);
+      const resolvedDate = new Date(point.resolvedAt);
+      const diffTime = Math.abs(resolvedDate - createdDate);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return sum + diffDays;
+    }, 0);
+    
+    return Math.round(totalDays / resolvedPoints.length);
+  }
+
+  /**
+   * Get the oldest pending complaint
+   */
+  getOldestPending(points) {
+    const pendingPoints = points.filter(p => 
+      p.markerType !== 'resolved' && p.createdAt
+    );
+    
+    if (pendingPoints.length === 0) return null;
+    
+    return pendingPoints.reduce((oldest, point) => {
+      if (!oldest) return point;
+      const oldestDate = new Date(oldest.createdAt);
+      const currentDate = new Date(point.createdAt);
+      return currentDate < oldestDate ? point : oldest;
+    }, null);
+  }
+
+  /**
+   * Insert mock complaint data for testing
+   * This is only used for development
+   */
+  async insertMockComplaintData() {
+    try {
+      console.log('Inserting mock complaint data...');
+      
+      const mockComplaints = this.getMockComplaints();
+      
+      // Insert each mock complaint
+      for (const complaint of mockComplaints) {
+        const { data, error } = await supabase
+          .from('complaints')
+          .insert(complaint);
+        
+        if (error) {
+          console.error('Error inserting mock complaint:', error);
+        } else {
+          console.log('Mock complaint inserted:', complaint.title);
+        }
+      }
+      
+      console.log('Mock data insertion complete');
+    } catch (error) {
+      console.error('Error inserting mock data:', error);
+    }
+  }
+
+  /**
+   * Get mock complaints for testing
+   */
+  getMockComplaints() {
+    return [
+      // Sample mock complaints for testing
+      {
+        title: 'Road Pothole on Main Street',
+        description: 'Large pothole causing accidents and damage to vehicles',
+        status: 'pending',
+        category: 'road',
+        location_address: 'Main Street, Downtown',
+        location_latitude: 11.0168 + (Math.random() - 0.5) * 0.05,
+        location_longitude: 76.9558 + (Math.random() - 0.5) * 0.05,
+        priority_score: 75,
+        created_at: new Date().toISOString()
+      },
+      {
+        title: 'Broken Street Light',
+        description: 'Street light not working for the past week causing safety concerns',
+        status: 'in_progress',
+        category: 'electricity',
+        location_address: 'Park Avenue, North Side',
+        location_latitude: 11.0201 + (Math.random() - 0.5) * 0.05,
+        location_longitude: 76.9634 + (Math.random() - 0.5) * 0.05,
+        priority_score: 65,
+        created_at: new Date().toISOString()
+      },
+      {
+        title: 'Garbage Not Collected',
+        description: 'Garbage bins not emptied for several days causing foul smell',
+        status: 'pending',
+        category: 'waste',
+        location_address: 'Green Lane, East Side',
+        location_latitude: 11.0307 + (Math.random() - 0.5) * 0.05,
+        location_longitude: 76.9712 + (Math.random() - 0.5) * 0.05,
+        priority_score: 80,
+        created_at: new Date().toISOString()
+      }
+    ];
+  }
+
+  /**
+   * Check for recent status changes in complaints
+   */
+  async checkForStatusChanges() {
+    try {
+      // Only check if we have the last update timestamp
+      if (!this.lastStatusCheck) {
+        this.lastStatusCheck = new Date();
+        this.statusChangeCache = new Map();
+        return;
+      }
+
+      const now = new Date();
+      // Check every 30 seconds at most
+      if ((now - this.lastStatusCheck) < 30000) {
+        return;
+      }
+
+      console.log('🔄 Checking for complaint status updates since', this.lastStatusCheck.toISOString());
+
+      const { data, error } = await supabase
+        .from('complaints')
+        .select('id, status, updated_at')
+        .gt('updated_at', this.lastStatusCheck.toISOString());
+
+      if (error) {
+        console.error('❌ Error checking for status changes:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        console.log(`✅ Found ${data.length} complaints with status changes`);
+        
+        // Update cache with new statuses
+        data.forEach(complaint => {
+          this.statusChangeCache.set(complaint.id, {
+            status: complaint.status,
+            updatedAt: complaint.updated_at
+          });
+        });
+      }
+
+      this.lastStatusCheck = now;
+    } catch (error) {
+      console.error('❌ Error checking for status changes:', error.message);
+    }
+  }
+}
+
+module.exports = HeatMapService;
