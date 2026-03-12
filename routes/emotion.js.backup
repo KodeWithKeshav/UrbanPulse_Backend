@@ -1,0 +1,635 @@
+const express = require('express');
+const router = express.Router();
+const axios = require('axios');
+
+/**
+ * Multilingual Emotion Analysis Service for CivicStack
+ * Hybrid approach: HuggingFace API + Universal Model + Keyword Fallback
+ */
+
+class EmotionAnalysisService {
+  constructor() {
+    this.config = {
+      huggingFaceToken: process.env.HUGGINGFACE_API_TOKEN,
+      models: {
+        // Primary multilingual models for high-accuracy emotion detection
+        hindi: 'cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual',
+        english: 'j-hartmann/emotion-english-distilroberta-base',
+        tamil: 'cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual',
+        telugu: 'cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual',
+        // Universal fallback model for all languages
+        universal: 'cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual',
+        // Emotion-specific model for detailed analysis
+        emotion: 'j-hartmann/emotion-english-distilroberta-base'
+      },
+      // API endpoints for different model types
+      apiEndpoints: {
+        sentiment: 'https://api-inference.huggingface.co/models/cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual',
+        emotion: 'https://api-inference.huggingface.co/models/j-hartmann/emotion-english-distilroberta-base',
+        classification: 'https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium'
+      },
+      // Language priority mapping
+      languageTiers: {
+        tier1: ['hi', 'en', 'ta', 'te'], // High priority - dedicated models
+        tier2: ['bn', 'gu', 'mr', 'pa'], // Medium priority - universal model
+        tier3: ['*'] // Fallback - keyword analysis
+      }
+    };
+    
+    // Civic-specific emotion keywords for different languages
+    this.emotionKeywords = {
+      hi: { // Hindi - using ISO code
+        anger: ['गुस्सा', 'क्रोध', 'नाराज़', 'परेशान', 'चिढ़', 'खफा', 'गुस्से', 'क्रोधित'],
+        urgency: ['तुरंत', 'जल्दी', 'आपातकाल', 'खतरनाक', 'अभी', 'फौरन', 'दुर्घटना', 'दुर्घटनाएं', 'मौत', 'मौतें', 'मृत्यु', 'जान', 'खतरा', 'गंभीर', 'भयानक'],
+        frustration: ['परेशान', 'तंग', 'दुखी', 'चिंतित', 'हैरान', 'निराश', 'परेशानी', 'दुःख'],
+        concern: ['चिंता', 'डर', 'फिक्र', 'घबराहट', 'बेचैनी', 'शंका', 'चिंतित', 'डरा', 'भयभीत', 'चिंताजनक']
+      },
+      hindi: { // Keep both for compatibility
+        anger: ['गुस्सा', 'क्रोध', 'नाराज़', 'परेशान', 'चिढ़', 'खफा', 'गुस्से', 'क्रोधित'],
+        urgency: ['तुरंत', 'जल्दी', 'आपातकाल', 'खतरनाक', 'अभी', 'फौरन', 'दुर्घटना', 'दुर्घटनाएं', 'मौत', 'मौतें', 'मृत्यु', 'जान', 'खतरा', 'गंभीर', 'भयानक'],
+        frustration: ['परेशान', 'तंग', 'दुखी', 'चिंतित', 'हैरान', 'निराश', 'परेशानी', 'दुःख'],
+        concern: ['चिंता', 'डर', 'फिक्र', 'घबराहट', 'बेचैनी', 'शंका', 'चिंतित', 'डरा', 'भयभीत', 'चिंताजनक']
+      },
+      en: { // English - using ISO code  
+        anger: ['angry', 'furious', 'mad', 'irritated', 'annoyed', 'frustrated', 'outraged', 'livid'],
+        urgency: ['urgent', 'emergency', 'immediate', 'dangerous', 'critical', 'asap', 'accident', 'accidents', 'death', 'deaths', 'died', 'killed', 'fatal', 'serious', 'severe', 'life-threatening'],
+        frustration: ['frustrated', 'fed up', 'tired', 'sick of', 'disappointed', 'exhausted', 'annoyed'],
+        concern: ['worried', 'concerned', 'scared', 'afraid', 'anxious', 'nervous', 'troubled', 'alarmed', 'fearful']
+      },
+      english: { // Keep both for compatibility
+        anger: ['angry', 'furious', 'mad', 'irritated', 'annoyed', 'frustrated', 'outraged', 'livid'],
+        urgency: ['urgent', 'emergency', 'immediate', 'dangerous', 'critical', 'asap', 'accident', 'accidents', 'death', 'deaths', 'died', 'killed', 'fatal', 'serious', 'severe', 'life-threatening'],
+        frustration: ['frustrated', 'fed up', 'tired', 'sick of', 'disappointed', 'exhausted', 'annoyed'],
+        concern: ['worried', 'concerned', 'scared', 'afraid', 'anxious', 'nervous', 'troubled', 'alarmed', 'fearful']
+      },
+      ta: { // Tamil - using ISO code
+        anger: ['கோபம்', 'எரிச்சல்', 'சீற்றம்', 'வெறுப்பு'],
+        urgency: ['அவசரம்', 'உடனடி', 'அபாயம்', 'முக்கியம்', 'ஆபத்து'],
+        frustration: ['வருத்தம்', 'கோபம்', 'எரிச்சல்', 'ஏமாற்றம்'],
+        concern: ['கவலை', 'பயம்', 'சந்தேகம்', 'கவலையாக']
+      },
+      tamil: { // Keep both for compatibility
+        anger: ['கோபம்', 'எரிச்சல்', 'சீற்றம்', 'வெறுப்பு'],
+        urgency: ['அவசரம்', 'உடனடி', 'அபாயம்', 'முக்கியம்', 'ஆபத்து'],
+        frustration: ['வருத்தம்', 'கோபம்', 'எரிச்சல்', 'ஏமாற்றம்'],
+        concern: ['கவலை', 'பயம்', 'சந்தேகம்', 'கவலையாக']
+      },
+      universal: {
+        // Common emotion indicators across languages
+        anger: ['😠', '😡', 'angry', 'mad', 'furious'],
+        urgency: ['!!!', '⚠️', 'urgent', 'emergency', 'immediate'],
+        frustration: ['😤', '😮‍💨', 'frustrated', 'tired'],
+        concern: ['😟', '😰', 'worried', 'concerned']
+      }
+    };
+  }
+
+  /**
+   * Detect language of input text
+   */
+  async detectLanguage(text) {
+    try {
+      // Simple language detection using character patterns
+      if (/[\u0900-\u097F]/.test(text)) return 'hi'; // Hindi/Devanagari
+      if (/[\u0B80-\u0BFF]/.test(text)) return 'ta'; // Tamil
+      if (/[\u0C00-\u0C7F]/.test(text)) return 'te'; // Telugu
+      if (/[\u0980-\u09FF]/.test(text)) return 'bn'; // Bengali
+      if (/[\u0A80-\u0AFF]/.test(text)) return 'gu'; // Gujarati
+      
+      // Default to English if no specific script detected
+      return 'en';
+    } catch (error) {
+      console.error('Language detection error:', error);
+      return 'en'; // Default fallback
+    }
+  }
+
+  /**
+   * Get language tier for processing strategy
+   */
+  getLanguageTier(language) {
+    if (this.config.languageTiers.tier1.includes(language)) return 1;
+    if (this.config.languageTiers.tier2.includes(language)) return 2;
+    return 3;
+  }
+
+  /**
+   * Analyze emotion using HuggingFace API with dynamic multilingual support
+   */
+  async analyzeWithHuggingFace(text, model) {
+    try {
+      // Use multilingual sentiment model for most languages
+      const apiUrl = model.includes('sentiment') || model.includes('multilingual') 
+        ? this.config.apiEndpoints.sentiment
+        : `https://api-inference.huggingface.co/models/${model}`;
+
+      console.log(`🤖 Calling HuggingFace API: ${apiUrl}`);
+      
+      const response = await axios.post(
+        apiUrl,
+        { 
+          inputs: text,
+          parameters: {
+            return_all_scores: true,
+            use_cache: false
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.config.huggingFaceToken}`,
+            'Content-Type': 'application/json',
+            'X-Wait-For-Model': 'true'
+          },
+          timeout: 30000 // 30 second timeout
+        }
+      );
+
+      console.log('✅ HuggingFace response received:', response.data);
+      return this.normalizeHuggingFaceResponse(response.data);
+    } catch (error) {
+      console.error('❌ HuggingFace API error:', error.message);
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Enhanced multilingual emotion analysis using real AI models
+   */
+  async analyzeEmotionWithAI(text, language) {
+    try {
+      // Step 1: Get sentiment analysis (works for all languages)
+      const sentimentResult = await this.analyzeWithHuggingFace(text, 'multilingual-sentiment');
+      
+      // Step 2: For English, also get detailed emotion analysis
+      let emotionResult = null;
+      if (language === 'en' || language === 'english') {
+        try {
+          emotionResult = await axios.post(
+            this.config.apiEndpoints.emotion,
+            { inputs: text, parameters: { return_all_scores: true } },
+            {
+              headers: {
+                'Authorization': `Bearer ${this.config.huggingFaceToken}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 30000
+            }
+          );
+        } catch (emotionError) {
+          console.log('⚠️ Emotion model failed, using sentiment only');
+        }
+      }
+
+      // Step 3: Combine and normalize results
+      return this.combineAIResults(sentimentResult, emotionResult?.data, text);
+    } catch (error) {
+      console.error('❌ AI analysis failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Keyword-based emotion analysis fallback
+   */
+  analyzeWithKeywords(text, language) {
+    const keywords = this.emotionKeywords[language] || this.emotionKeywords.universal;
+    const emotions = {
+      anger: 0,
+      urgency: 0,
+      frustration: 0,
+      concern: 0
+    };
+
+    const textLower = text.toLowerCase();
+    
+    Object.keys(emotions).forEach(emotion => {
+      const emotionKeywords = keywords[emotion] || [];
+      let score = 0;
+      
+      emotionKeywords.forEach(keyword => {
+        if (textLower.includes(keyword.toLowerCase())) {
+          score += 0.2; // Each keyword adds 20% confidence
+        }
+      });
+      
+      emotions[emotion] = Math.min(score, 1.0); // Cap at 100%
+    });
+
+    return emotions;
+  }
+
+  /**
+   * Combine sentiment and emotion AI results into civic emotion format
+   */
+  combineAIResults(sentimentResult, emotionResult, text) {
+    const emotions = {
+      anger: 0,
+      urgency: 0,
+      frustration: 0,
+      concern: 0
+    };
+
+    // Map sentiment to civic emotions
+    if (sentimentResult) {
+      // Negative sentiment often indicates concern or frustration
+      if (sentimentResult.label === 'NEGATIVE' || sentimentResult.label === 'negative') {
+        emotions.concern = Math.min(sentimentResult.score * 0.8, 1.0);
+        emotions.frustration = Math.min(sentimentResult.score * 0.6, 1.0);
+      }
+    }
+
+    // Map detailed emotions (for English)
+    if (emotionResult && Array.isArray(emotionResult)) {
+      const emotionScores = emotionResult[0] || emotionResult;
+      
+      if (Array.isArray(emotionScores)) {
+        emotionScores.forEach(emotion => {
+          const label = emotion.label.toLowerCase();
+          const score = emotion.score;
+
+          switch (label) {
+            case 'anger':
+            case 'rage':
+              emotions.anger = Math.max(emotions.anger, score);
+              break;
+            case 'fear':
+            case 'nervousness':
+              emotions.concern = Math.max(emotions.concern, score);
+              emotions.urgency = Math.max(emotions.urgency, score * 0.8);
+              break;
+            case 'sadness':
+            case 'disappointment':
+              emotions.frustration = Math.max(emotions.frustration, score);
+              break;
+            case 'surprise':
+              emotions.urgency = Math.max(emotions.urgency, score * 0.6);
+              break;
+          }
+        });
+      }
+    }
+
+    // Boost urgency based on text content analysis
+    const urgencyBoost = this.detectUrgencyFromContent(text);
+    emotions.urgency = Math.min(emotions.urgency + urgencyBoost, 1.0);
+
+    return emotions;
+  }
+
+  /**
+   * Detect urgency from content regardless of language
+   */
+  detectUrgencyFromContent(text) {
+    const urgencyIndicators = [
+      // English
+      'death', 'deaths', 'died', 'accident', 'accidents', 'emergency', 'urgent', 'critical', 'dangerous', 'fatal',
+      // Hindi  
+      'मौत', 'मौतें', 'मृत्यु', 'दुर्घटना', 'दुर्घटनाएं', 'आपातकाल', 'खतरनाक', 'गंभीर', 'जान',
+      // Tamil
+      'மரணம்', 'விபத்து', 'ஆபத்து', 'அவசரம்', 'முக்கியம்',
+      // Universal indicators
+      '!!!', 'help', 'please', 'urgent'
+    ];
+
+    let urgencyScore = 0;
+    const textLower = text.toLowerCase();
+    
+    urgencyIndicators.forEach(indicator => {
+      if (textLower.includes(indicator.toLowerCase())) {
+        urgencyScore += 0.2;
+      }
+    });
+
+    return Math.min(urgencyScore, 0.8);
+  }
+
+  /**
+   * Enhanced normalization for multiple AI model responses
+   */
+  normalizeHuggingFaceResponse(data) {
+    console.log('🔄 Normalizing response:', data);
+    
+    // Handle sentiment analysis response
+    if (Array.isArray(data) && data[0] && data[0].label) {
+      const result = data[0];
+      return {
+        label: result.label,
+        score: result.score
+      };
+    }
+
+    // Handle emotion analysis response
+    if (Array.isArray(data) && data[0] && Array.isArray(data[0])) {
+      return data[0];
+    }
+
+    // Handle direct emotion object
+    if (data && typeof data === 'object') {
+      return {
+        anger: data.anger || data.ANGER || 0,
+        urgency: data.urgency || data.fear || data.FEAR || 0,
+        frustration: data.frustration || data.sadness || data.SADNESS || 0,
+        concern: data.concern || data.surprise || data.SURPRISE || 0
+      };
+    }
+    
+    // Fallback
+    console.log('⚠️ Unexpected response format, using fallback');
+    return { anger: 0, urgency: 0, frustration: 0, concern: 0 };
+  }
+
+  /**
+   * Calculate final emotion score for priority calculation
+   */
+  calculateEmotionScore(emotions) {
+    // Weighted combination of emotions for civic complaint prioritization
+    const weights = {
+      urgency: 0.4,    // Urgent issues get highest priority
+      anger: 0.3,      // Angry citizens need quick response
+      concern: 0.2,    // Genuine concerns are important
+      frustration: 0.1 // Frustration indicates ongoing issues
+    };
+
+    let totalScore = 0;
+    Object.keys(weights).forEach(emotion => {
+      totalScore += (emotions[emotion] || 0) * weights[emotion];
+    });
+
+    return Math.min(totalScore, 1.0); // Ensure score is between 0-1
+  }
+
+  /**
+   * Main emotion analysis function with AI-powered multilingual support
+   */
+  async analyzeEmotion(text, category = null) {
+    try {
+      console.log('🧠 Starting AI-powered emotion analysis for text:', text.substring(0, 100));
+      
+      // Step 1: Detect language
+      const language = await this.detectLanguage(text);
+      const tier = this.getLanguageTier(language);
+      
+      console.log(`📊 Detected language: ${language} (Tier ${tier})`);
+
+      let emotions = {};
+      let analysisMethod = '';
+      
+      // Step 2: Try AI analysis first (if API token available)
+      if (this.config.huggingFaceToken) {
+        try {
+          console.log('🤖 Using AI models for dynamic emotion analysis...');
+          emotions = await this.analyzeEmotionWithAI(text, language);
+          analysisMethod = 'ai-powered-multilingual';
+          console.log('✅ AI analysis successful');
+        } catch (error) {
+          console.log('⚠️ AI analysis failed, falling back to hybrid approach');
+          // Fallback to original hybrid approach
+          emotions = await this.hybridAnalysisFallback(text, language, tier);
+          analysisMethod = 'hybrid-fallback';
+        }
+      } else {
+                // No API token - use keyword analysis
+        emotions = this.analyzeWithKeywords(text, language);
+        analysisMethod = 'keyword-only';
+        console.log('📝 Using keyword analysis (no AI token)');
+      }
+
+      // Step 3: Calculate final emotion score
+      const emotionScore = this.calculateEmotionScore(emotions);
+      
+      // Step 4: Add category-specific adjustments
+      const adjustedScore = this.applyCategoryAdjustments(emotionScore, category);
+
+      console.log('🎯 Final emotion analysis:', {
+        language,
+        emotions,
+        emotionScore: adjustedScore,
+        tier,
+        analysisMethod
+      });
+
+      return {
+        success: true,
+        emotionScore: adjustedScore,
+        emotions,
+        language,
+        tier,
+        analysisMethod
+      };
+    } catch (error) {
+      console.error('❌ Emotion analysis failed:', error);
+      
+      // Emergency fallback
+      const fallbackScore = this.getEmergencyFallbackScore(text, category);
+      
+      return {
+        success: false,
+        emotionScore: fallbackScore,
+        emotions: { anger: 0, urgency: 0, frustration: 0, concern: 0 },
+        language: 'unknown',
+        tier: 3,
+        analysisMethod: 'emergency-fallback',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Hybrid analysis fallback when AI fails
+   */
+  async hybridAnalysisFallback(text, language, tier) {
+    if (tier === 1) {
+      // High priority languages - try dedicated models
+      const model = this.config.models[language] || this.config.models.universal;
+      try {
+        return await this.analyzeWithHuggingFace(text, model);
+      } catch (error) {
+        return this.analyzeWithKeywords(text, language);
+      }
+    } else if (tier === 2) {
+      // Medium priority - use universal model
+      try {
+        return await this.analyzeWithHuggingFace(text, this.config.models.universal);
+      } catch (error) {
+        return this.analyzeWithKeywords(text, language);
+      }
+    } else {
+      // Low priority - keyword analysis only
+      return this.analyzeWithKeywords(text, language);
+    }
+  }
+      }
+
+      // Step 3: Calculate final emotion score
+      const emotionScore = this.calculateEmotionScore(emotions);
+      
+      // Step 4: Add category-specific adjustments
+      const adjustedScore = this.applyCategoryAdjustments(emotionScore, category);
+
+      console.log('🎯 Final emotion analysis:', {
+        language,
+        emotions,
+        emotionScore: adjustedScore,
+        tier
+      });
+
+      return {
+        success: true,
+        emotionScore: adjustedScore,
+        emotions,
+        language,
+        tier,
+        analysisMethod: tier === 1 ? 'dedicated-model' : tier === 2 ? 'universal-model' : 'keyword-based'
+      };
+
+    } catch (error) {
+      console.error('❌ Emotion analysis error:', error);
+      
+      // Emergency fallback
+      const fallbackScore = this.getEmergencyFallbackScore(text, category);
+      
+      return {
+        success: false,
+        emotionScore: fallbackScore,
+        emotions: { anger: 0, urgency: 0, frustration: 0, concern: 0 },
+        language: 'unknown',
+        tier: 3,
+        analysisMethod: 'emergency-fallback',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Apply category-specific emotion score adjustments
+   */
+  applyCategoryAdjustments(score, category) {
+    const categoryMultipliers = {
+      'fire_hazard': 1.5,           // Fire is always urgent
+      'electrical_danger': 1.4,     // Electrical issues are dangerous
+      'sewage_overflow': 1.3,       // Health hazard
+      'water_main_break': 1.3,      // Infrastructure emergency
+      'gas_leak': 1.5,              // Safety critical
+      'pothole': 1.1,               // Common but can be urgent
+      'broken_streetlight': 1.0,    // Standard priority
+      'garbage_collection': 0.9,    // Usually not urgent
+      'noise_complaint': 0.8        // Lower priority typically
+    };
+
+    const multiplier = categoryMultipliers[category] || 1.0;
+    return Math.min(score * multiplier, 1.0);
+  }
+
+  /**
+   * Emergency fallback when all analysis methods fail
+   */
+  getEmergencyFallbackScore(text, category) {
+    // Basic urgency detection for emergency situations
+    const urgentKeywords = ['emergency', 'urgent', 'danger', 'help', 'fire', 'gas', 'leak'];
+    const hasUrgentKeyword = urgentKeywords.some(keyword => 
+      text.toLowerCase().includes(keyword)
+    );
+    
+    if (hasUrgentKeyword) return 0.8;
+    if (category && ['fire_hazard', 'gas_leak', 'electrical_danger'].includes(category)) return 0.9;
+    
+    return 0.5; // Default moderate priority
+  }
+}
+
+// Initialize service
+const emotionService = new EmotionAnalysisService();
+
+/**
+ * API endpoint for emotion analysis
+ * POST /api/emotion/analyze
+ */
+router.post('/analyze', async (req, res) => {
+  try {
+    const { text, category, language } = req.body;
+    
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Text is required for emotion analysis'
+      });
+    }
+
+    console.log('🔍 Emotion analysis request:', {
+      textLength: text.length,
+      category,
+      providedLanguage: language
+    });
+
+    const result = await emotionService.analyzeEmotion(text, category);
+    
+    res.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Emotion analysis endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to analyze emotion',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Test endpoint for emotion analysis
+ * GET /api/emotion/test
+ */
+router.get('/test', async (req, res) => {
+  const testCases = [
+    {
+      text: "यह सड़क पर बहुत बड़ा गड्ढा है, बहुत परेशान हूं",
+      category: "pothole",
+      expected: "Hindi with high frustration"
+    },
+    {
+      text: "Emergency! Gas leak in our building, very dangerous situation",
+      category: "gas_leak", 
+      expected: "English with high urgency"
+    },
+    {
+      text: "எங்கள் பகுதியில் சாலை விளக்கு வேலை செய்யவில்லை, இரவில் பயமாக உள்ளது",
+      category: "broken_streetlight",
+      expected: "Tamil with concern"
+    }
+  ];
+
+  const results = [];
+  
+  for (const testCase of testCases) {
+    try {
+      const result = await emotionService.analyzeEmotion(testCase.text, testCase.category);
+      results.push({
+        input: testCase,
+        output: result,
+        status: 'success'
+      });
+    } catch (error) {
+      results.push({
+        input: testCase,
+        error: error.message,
+        status: 'failed'
+      });
+    }
+  }
+
+  res.json({
+    success: true,
+    testResults: results,
+    timestamp: new Date().toISOString()
+  });
+});
+
+module.exports = router;
