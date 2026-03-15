@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 
 // Import admin complaint routes
@@ -10,7 +10,7 @@ router.use('/complaints', adminComplaintsRouter);
 // Admin dashboard route
 router.get('/dashboard', async (req, res) => {
   try {
-    console.log('📊 Admin dashboard data requested');
+    console.log(' Admin dashboard data requested');
     const supabase = req.app.get('supabase');
     
     // Get complaint statistics
@@ -25,11 +25,11 @@ router.get('/dashboard', async (req, res) => {
       .limit(1000);
     
     if (complaintsError) {
-      console.log('❌ Error fetching complaints:', complaintsError);
+      console.log(' Error fetching complaints:', complaintsError);
     }
     
     if (usersError) {
-      console.log('❌ Error fetching users:', usersError);
+      console.log(' Error fetching users:', usersError);
     }
     
     // Calculate dashboard statistics
@@ -102,3 +102,4 @@ function calculateUserStatistics(users) {
 }
 
 module.exports = router;
+

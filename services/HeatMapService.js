@@ -1,4 +1,4 @@
-const { supabase } = require('../config/supabase');
+﻿const { supabase } = require('../config/supabase');
 
 class HeatMapService {
   constructor() {
@@ -21,14 +21,14 @@ class HeatMapService {
         .limit(1);
       
       if (error) {
-        console.log('🔗 Database connection test failed, will use mock data');
+        console.log(' Database connection test failed, will use mock data');
         this.useOnlyMockData = true;
       } else {
-        console.log('✅ Database connection successful');
+        console.log(' Database connection successful');
         this.useOnlyMockData = false;
       }
     } catch (err) {
-      console.log('🔗 Database connection error, using mock data:', err.message);
+      console.log(' Database connection error, using mock data:', err.message);
       this.useOnlyMockData = true;
     }
   }
@@ -39,10 +39,10 @@ class HeatMapService {
    */
   async getComplaintHeatMapData(filters = {}) {
     try {
-      console.log('🗺️ Fetching complaint heat map data...');
+      console.log(' Fetching complaint heat map data...');
       
       // No mock data - always try to use real database
-      console.log('📊 Using real data from database');
+      console.log(' Using real data from database');
 
       // First check for status changes
       await this.checkForStatusChanges();
@@ -85,13 +85,13 @@ class HeatMapService {
       const { data: complaints, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error fetching complaints:', error);
+        console.error(' Error fetching complaints:', error);
         throw new Error(`Database error: ${error.message}`);
       }
 
       // Return empty array if no complaints found - no mock data
       if (!complaints || complaints.length === 0) {
-        console.log('⚠️ No complaints found in database');
+        console.log(' No complaints found in database');
         return {
           points: [],
           statistics: {
@@ -110,11 +110,11 @@ class HeatMapService {
         };
       }
 
-      console.log(`✅ Found ${complaints.length} complaints for heat map`);
+      console.log(` Found ${complaints.length} complaints for heat map`);
       return this.formatHeatMapData(complaints);
 
     } catch (error) {
-      console.error('❌ Heat map service error:', error.message);
+      console.error(' Heat map service error:', error.message);
       // Return empty data structure instead of mock data
       return {
         points: [],
@@ -139,7 +139,7 @@ class HeatMapService {
    * Format complaint data for heat map visualization
    */
   formatHeatMapData(complaints) {
-    console.log(`🔄 Formatting ${complaints.length} complaints for heat map`);
+    console.log(` Formatting ${complaints.length} complaints for heat map`);
     
     const heatMapPoints = complaints
       .filter(complaint => 
@@ -155,7 +155,7 @@ class HeatMapService {
         let status = complaint.status;
         if (this.statusChangeCache && this.statusChangeCache.has(complaint.id)) {
           const cachedStatus = this.statusChangeCache.get(complaint.id);
-          console.log(`📝 Using cached status for complaint ${complaint.id}: ${cachedStatus.status}`);
+          console.log(` Using cached status for complaint ${complaint.id}: ${cachedStatus.status}`);
           status = cachedStatus.status;
         }
         
@@ -170,7 +170,7 @@ class HeatMapService {
         const weight = this.getComplaintWeight(complaint);
         
         // Log the formatted point for debugging
-        console.log(`📍 Formatted point: id=${complaint.id}, lat=${lat}, lng=${lng}, weight=${weight}, status=${status}`);
+        console.log(` Formatted point: id=${complaint.id}, lat=${lat}, lng=${lng}, weight=${weight}, status=${status}`);
         
         // Return both lat/lng and latitude/longitude for maximum compatibility
         return {
@@ -462,7 +462,7 @@ Location: ${complaint.location_address || 'Unknown'}`;
         return;
       }
 
-      console.log('🔄 Checking for complaint status updates since', this.lastStatusCheck.toISOString());
+      console.log(' Checking for complaint status updates since', this.lastStatusCheck.toISOString());
 
       const { data, error } = await supabase
         .from('complaints')
@@ -470,12 +470,12 @@ Location: ${complaint.location_address || 'Unknown'}`;
         .gt('updated_at', this.lastStatusCheck.toISOString());
 
       if (error) {
-        console.error('❌ Error checking for status changes:', error);
+        console.error(' Error checking for status changes:', error);
         return;
       }
 
       if (data && data.length > 0) {
-        console.log(`✅ Found ${data.length} complaints with status changes`);
+        console.log(` Found ${data.length} complaints with status changes`);
         
         // Update cache with new statuses
         data.forEach(complaint => {
@@ -488,9 +488,10 @@ Location: ${complaint.location_address || 'Unknown'}`;
 
       this.lastStatusCheck = now;
     } catch (error) {
-      console.error('❌ Error checking for status changes:', error.message);
+      console.error(' Error checking for status changes:', error.message);
     }
   }
 }
 
 module.exports = HeatMapService;
+

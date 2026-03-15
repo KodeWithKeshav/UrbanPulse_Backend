@@ -1,4 +1,4 @@
-const { createClient } = require('@supabase/supabase-js');
+﻿const { createClient } = require('@supabase/supabase-js');
 
 // Supabase configuration - using environment variables only
 const supabaseUrl = process.env.SUPABASE_URL;

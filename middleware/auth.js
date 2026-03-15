@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+﻿const jwt = require('jsonwebtoken');
 const { supabase } = require('../config/supabase');
 
 /**
@@ -15,7 +15,7 @@ const authenticateUser = async (req, res, next) => {
     
     // If no token, continue as anonymous user
     if (!token) {
-      console.log('🔒 No authentication token provided');
+      console.log(' No authentication token provided');
       req.user = null;
       return next();
     }
@@ -32,7 +32,7 @@ const authenticateUser = async (req, res, next) => {
       .single();
     
     if (error || !user) {
-      console.log('🔒 User not found or inactive:', decoded.userId);
+      console.log(' User not found or inactive:', decoded.userId);
       req.user = null;
       return next();
     }
@@ -46,10 +46,10 @@ const authenticateUser = async (req, res, next) => {
       isAuthenticated: true
     };
     
-    console.log(`🔓 Authenticated user: ${user.email} (${user.id})`);
+    console.log(` Authenticated user: ${user.email} (${user.id})`);
     next();
   } catch (error) {
-    console.log('🔒 Authentication error:', error.message);
+    console.log(' Authentication error:', error.message);
     req.user = null;
     next();
   }
@@ -85,3 +85,4 @@ module.exports = {
   authenticateUser,
   authorizeUserType
 };
+

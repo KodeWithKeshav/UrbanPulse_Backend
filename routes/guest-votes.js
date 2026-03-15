@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 const crypto = require('crypto');
@@ -30,7 +30,7 @@ function generateGuestUUID(deviceId) {
  */
 router.post('/', async (req, res) => {
   try {
-    console.log('🗳️ Processing guest vote request:', req.body);
+    console.log(' Processing guest vote request:', req.body);
     
     const { complaintId, deviceId } = req.body;
     
@@ -49,7 +49,7 @@ router.post('/', async (req, res) => {
       .single();
 
     if (complaintError || !complaint) {
-      console.error('❌ Complaint not found:', complaintError || 'No data returned');
+      console.error(' Complaint not found:', complaintError || 'No data returned');
       return res.status(404).json({ 
         success: false, 
         message: 'Complaint not found' 
@@ -71,7 +71,7 @@ router.post('/', async (req, res) => {
       .select();
 
     if (insertError) {
-      console.error('❌ Error adding guest vote:', insertError);
+      console.error(' Error adding guest vote:', insertError);
       return res.status(500).json({ 
         success: false, 
         message: 'Failed to add vote',
@@ -88,11 +88,11 @@ router.post('/', async (req, res) => {
       .eq('id', complaintId);
 
     if (updateError) {
-      console.error('❌ Error updating vote count:', updateError);
+      console.error(' Error updating vote count:', updateError);
       // We could rollback the vote insert here, but for simplicity we'll continue
     }
 
-    console.log('✅ Guest vote added successfully');
+    console.log(' Guest vote added successfully');
 
     // Get updated vote count
     const { data: updatedComplaint, error: fetchError } = await supabase
@@ -116,7 +116,7 @@ router.post('/', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Guest vote processing error:', error);
+    console.error(' Guest vote processing error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while processing guest vote'
@@ -125,7 +125,7 @@ router.post('/', async (req, res) => {
 });
 router.post('/', async (req, res) => {
   try {
-    console.log('🗳️ Processing guest vote request:', req.body);
+    console.log(' Processing guest vote request:', req.body);
     
     const { complaintId, deviceId } = req.body;
     
@@ -144,7 +144,7 @@ router.post('/', async (req, res) => {
       .single();
 
     if (complaintError || !complaint) {
-      console.error('❌ Complaint not found:', complaintError || 'No data returned');
+      console.error(' Complaint not found:', complaintError || 'No data returned');
       return res.status(404).json({ 
         success: false, 
         message: 'Complaint not found' 
@@ -167,7 +167,7 @@ router.post('/', async (req, res) => {
         .single();
 
       if (deviceVoteError && deviceVoteError.code !== 'PGRST116') {
-        console.error('❌ Error checking device vote:', deviceVoteError);
+        console.error(' Error checking device vote:', deviceVoteError);
         return res.status(500).json({ 
           success: false, 
           message: 'Error checking vote status' 
@@ -197,7 +197,7 @@ router.post('/', async (req, res) => {
         .select();
 
       if (insertError) {
-        console.error('❌ Error adding guest vote:', insertError);
+        console.error(' Error adding guest vote:', insertError);
         return res.status(500).json({ 
           success: false, 
           message: 'Failed to add vote',
@@ -214,13 +214,13 @@ router.post('/', async (req, res) => {
         .eq('id', complaintId);
 
       if (updateError) {
-        console.error('❌ Error updating vote count:', updateError);
+        console.error(' Error updating vote count:', updateError);
         // Note: We could rollback the vote insert here, but for simplicity we'll continue
       }
 
       result = newVote;
       message = 'Vote added successfully';
-      console.log('✅ Guest vote added successfully');
+      console.log(' Guest vote added successfully');
       
     } else {
       // Existing vote found - toggle it
@@ -237,7 +237,7 @@ router.post('/', async (req, res) => {
         .select();
 
       if (updateError) {
-        console.error('❌ Error updating guest vote:', updateError);
+        console.error(' Error updating guest vote:', updateError);
         return res.status(500).json({ 
           success: false, 
           message: 'Failed to update vote' 
@@ -253,12 +253,12 @@ router.post('/', async (req, res) => {
         .eq('id', complaintId);
 
       if (countUpdateError) {
-        console.error('❌ Error updating vote count:', countUpdateError);
+        console.error(' Error updating vote count:', countUpdateError);
       }
 
       result = updatedVote;
       message = newVoteType === 'upvote' ? 'Vote added successfully' : 'Vote removed successfully';
-      console.log(`✅ Guest vote toggled to: ${newVoteType}`);
+      console.log(` Guest vote toggled to: ${newVoteType}`);
     }
 
     // Get updated vote count from complaints table
@@ -283,7 +283,7 @@ router.post('/', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Guest vote processing error:', error);
+    console.error(' Guest vote processing error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while processing guest vote'
@@ -340,7 +340,7 @@ router.get('/status/:complaintId', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error getting guest vote status:', error);
+    console.error(' Error getting guest vote status:', error);
     return res.status(500).json({
       success: false,
       message: 'Error retrieving vote status'
@@ -349,3 +349,4 @@ router.get('/status/:complaintId', async (req, res) => {
 });
 
 module.exports = router;
+

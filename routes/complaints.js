@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 const LocationPriorityService = require('../services/LocationPriorityService');
@@ -13,7 +13,7 @@ const locationPriorityService = new LocationPriorityService();
 // Function to check the complaints table schema
 async function checkComplaintsTableSchema() {
   try {
-    console.log('ðŸ“Š Checking complaints table schema...');
+    console.log(' Checking complaints table schema...');
     // Introspect the table schema to see column names
     const { data, error } = await supabase
       .from('complaints')
@@ -21,19 +21,19 @@ async function checkComplaintsTableSchema() {
       .limit(1);
       
     if (error) {
-      console.error('âŒ Schema check error:', error);
+      console.error(' Schema check error:', error);
       return null;
     }
     
     if (data && data.length > 0) {
-      console.log('ðŸ“‹ Available columns in complaints table:', Object.keys(data[0]));
+      console.log(' Available columns in complaints table:', Object.keys(data[0]));
       return Object.keys(data[0]);
     } else {
-      console.log('â„¹ï¸ No records in complaints table to infer schema');
+      console.log(' No records in complaints table to infer schema');
       return [];
     }
   } catch (error) {
-    console.error('âŒ Schema check failed:', error);
+    console.error(' Schema check failed:', error);
     return null;
   }
 }
@@ -57,10 +57,10 @@ async function filterComplaintDataForInsertion(complaintData, availableColumns) 
       // Ensure value is a number between 0 and 9.99
       if (typeof filteredData[field] === 'number') {
         if (filteredData[field] >= 10) {
-          console.log(`âš ï¸ Adjusting ${field} from ${filteredData[field]} to 9.99 to prevent overflow`);
+          console.log(` Adjusting ${field} from ${filteredData[field]} to 9.99 to prevent overflow`);
           filteredData[field] = 9.99;
         } else if (filteredData[field] < 0) {
-          console.log(`âš ï¸ Adjusting ${field} from ${filteredData[field]} to 0 to ensure positive value`);
+          console.log(` Adjusting ${field} from ${filteredData[field]} to 0 to ensure positive value`);
           filteredData[field] = 0;
         } else {
           // Ensure we're working with 2 decimal places max
@@ -137,30 +137,30 @@ router.post('/submit', async (req, res) => {
         .limit(1);
       
       if (findError) {
-        console.error('âŒ Error checking for demo user:', findError);
+        console.error(' Error checking for demo user:', findError);
       }
       
       // If user exists, return its ID
       if (existingUser && existingUser.length > 0) {
-        console.log('âœ… Using existing demo user:', existingUser[0].id);
+        console.log(' Using existing demo user:', existingUser[0].id);
         return existingUser[0].id;
       }
       
-      console.log('âš ï¸ Demo user not found, creating one...');
+      console.log(' Demo user not found, creating one...');
       
       try {
         const { data: demoId, error: rpcError } = await supabase.rpc('create_demo_user');
         
         if (!rpcError && demoId) {
-          console.log('âœ… Created demo user via RPC:', demoId);
+          console.log(' Created demo user via RPC:', demoId);
           return demoId;
         }
         
         if (rpcError) {
-          console.log('âš ï¸ RPC function not available:', rpcError.message);
+          console.log(' RPC function not available:', rpcError.message);
         }
       } catch (e) {
-        console.log('âš ï¸ RPC call failed, falling back to direct insert');
+        console.log(' RPC call failed, falling back to direct insert');
       }
       
       const demoUuid = generateUuid();
@@ -181,13 +181,13 @@ router.post('/submit', async (req, res) => {
         });
         
         if (sqlError) {
-          console.error('âŒ SQL error creating demo user:', sqlError);
+          console.error(' SQL error creating demo user:', sqlError);
         } else {
-          console.log('âœ… Created demo user via SQL:', data);
+          console.log(' Created demo user via SQL:', data);
           return demoUuid;
         }
       } catch (sqlExecError) {
-        console.error('âŒ SQL execution error:', sqlExecError);
+        console.error(' SQL execution error:', sqlExecError);
       }
       
       const { data: newUser, error: insertError } = await supabase
@@ -207,13 +207,13 @@ router.post('/submit', async (req, res) => {
         .select();
       
       if (insertError) {
-        console.error('âŒ Error creating demo user:', insertError);
+        console.error(' Error creating demo user:', insertError);
         // All attempts failed, but we need to return something
-        console.log('âš ï¸ All demo user creation methods failed, using generated UUID as fallback');
+        console.log(' All demo user creation methods failed, using generated UUID as fallback');
         return demoUuid;
       }
       
-      console.log('âœ… Created new demo user:', newUser[0].id);
+      console.log(' Created new demo user:', newUser[0].id);
       return newUser[0].id;
     };
     
@@ -222,18 +222,18 @@ router.post('/submit', async (req, res) => {
     
     // If user is authenticated, use their ID
     if (authenticatedUser && authenticatedUser.id) {
-      console.log(`ðŸ”‘ Using authenticated user_id: ${authenticatedUser.id}`);
+      console.log(` Using authenticated user_id: ${authenticatedUser.id}`);
       userUuid = authenticatedUser.id;
     } 
     // If userId is provided in the request and it's a valid UUID, use it
     else if (isUuid(userId)) {
-      console.log(`ðŸ”‘ Using provided user_id: ${userId}`);
+      console.log(` Using provided user_id: ${userId}`);
       userUuid = userId;
     } 
     // Otherwise create or find a demo user
     else {
       userUuid = await ensureDemoUser();
-      console.log(`ðŸ”‘ Using demo user_id: ${userUuid}`);
+      console.log(` Using demo user_id: ${userUuid}`);
     }
     
     // Create a base complaint object with essential fields
@@ -297,7 +297,7 @@ router.post('/submit', async (req, res) => {
         .select();
       
       if (error) {
-        console.error('âŒ Supabase insert error:', error);
+        console.error(' Supabase insert error:', error);
         
         // Provide more specific error handling for numeric overflow
         if (error.code === '22003' && error.message.includes('numeric field overflow')) {
@@ -308,7 +308,7 @@ router.post('/submit', async (req, res) => {
       }
       
       complaint = data;
-      console.log('âœ… Complaint saved to Supabase:', complaint);
+      console.log(' Complaint saved to Supabase:', complaint);
       
       // After successful complaint submission, create an initial complaint update entry
       if (complaint && complaint[0] && complaint[0].id) {
@@ -327,9 +327,9 @@ router.post('/submit', async (req, res) => {
           }]);
         
         if (updateError) {
-          console.error('âŒ Error creating complaint update entry:', updateError);
+          console.error(' Error creating complaint update entry:', updateError);
         } else {
-          console.log('âœ… Added initial complaint update entry');
+          console.log(' Added initial complaint update entry');
         }
         
         
@@ -353,22 +353,22 @@ router.post('/submit', async (req, res) => {
             }]);
           
           if (voteError) {
-            console.error('âŒ Error creating complaint vote entry:', voteError);
+            console.error(' Error creating complaint vote entry:', voteError);
           } else {
-            console.log('âœ… Added initial complaint vote entry');
+            console.log(' Added initial complaint vote entry');
           }
         } catch (voteErr) {
-          console.error('âŒ Exception in complaint vote creation:', voteErr);
+          console.error(' Exception in complaint vote creation:', voteErr);
         }
       }
     } catch (dbError) {
-      console.error('âŒ Database operation failed:', dbError);
+      console.error(' Database operation failed:', dbError);
       
       // Attempt to get table schema directly (alternative approach)
       try {
         const { data: schema } = await supabase.rpc('get_table_columns', { table_name: 'complaints' });
         if (schema) {
-          console.log('ðŸ“Š Complaints table columns:', schema);
+          console.log(' Complaints table columns:', schema);
         }
       } catch (e) {
         console.error('Could not fetch schema via RPC:', e);
@@ -402,7 +402,7 @@ router.post('/submit', async (req, res) => {
       },
       location: {
         privacyLevel: locationData.privacyLevel,
-        accuracy: locationData.accuracy ? `Â±${locationData.accuracy}m` : 'Unknown',
+        accuracy: locationData.accuracy ? `${locationData.accuracy}m` : 'Unknown',
         description: locationData.description
       },
       nextSteps: generateNextSteps(priorityAnalysis.priorityLevel, category),
@@ -410,7 +410,7 @@ router.post('/submit', async (req, res) => {
     
     res.json(response);
   } catch (error) {
-    console.error('âŒ Complaint submission error:', error);
+    console.error(' Complaint submission error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to submit complaint',
@@ -533,7 +533,7 @@ async function calculateComprehensivePriority({ imageValidation, locationData, c
     };
     
   } catch (error) {
-    console.error('âŒ Priority calculation error:', error);
+    console.error(' Priority calculation error:', error);
     
     // Fallback priority based on complaint category
     const fallbackScore = getFallbackPriority(category);
@@ -642,14 +642,14 @@ function generateNextSteps(priorityLevel, category) {
 
   if (priorityLevel === 'CRITICAL') {
     return [
-      'ðŸš¨ Your complaint has been marked as CRITICAL priority.',
+      ' Your complaint has been marked as CRITICAL priority.',
       'An urgent response team will be notified immediately.',
       'Expect a response within 24 hours.',
       'You can track real-time updates in your dashboard.'
     ];
   } else if (priorityLevel === 'HIGH') {
     return [
-      'âš ï¸ Your complaint has been marked as HIGH priority.',
+      ' Your complaint has been marked as HIGH priority.',
       'It will be reviewed by municipal staff within 48 hours.',
       'You will receive updates when your complaint status changes.',
       'Local authorities have been notified about this issue.'
@@ -703,7 +703,7 @@ router.get('/', async (req, res) => {
     
     // Apply location-based filtering if latitude, longitude, and radius are provided
     if (latitude && longitude && radius) {
-      console.log(`ðŸŒŽ Filtering complaints by location: lat=${latitude}, lng=${longitude}, radius=${radius}m`);
+      console.log(` Filtering complaints by location: lat=${latitude}, lng=${longitude}, radius=${radius}m`);
       
       // Calculate the approximate distance in degrees for the radius
       const radiusInDegrees = parseFloat(radius) / 111000; // 1 degree is approximately 111km
@@ -764,7 +764,7 @@ router.get('/', async (req, res) => {
     
     // Log the vote counts to help with debugging
     if (data) {
-      console.log(`ðŸ“Š Returning ${data.length} complaints with vote counts:`, 
+      console.log(` Returning ${data.length} complaints with vote counts:`, 
         data.map(c => ({id: c.id, votes: c.vote_count || 0, userVoted: c.userVoted || false}))
       );
     }
@@ -794,7 +794,7 @@ router.get('/', async (req, res) => {
  */
 router.get('/all', async (req, res) => {
   try {
-    console.log('ðŸ“‹ Fetching all complaints');
+    console.log(' Fetching all complaints');
     
     const { data, error } = await supabase
       .from('complaints')
@@ -805,7 +805,7 @@ router.get('/all', async (req, res) => {
       throw new Error(error.message);
     }
     
-    console.log(`âœ… Successfully fetched ${data.length} complaints`);
+    console.log(` Successfully fetched ${data.length} complaints`);
     
     res.json({
       success: true,
@@ -824,7 +824,7 @@ router.get('/all', async (req, res) => {
 router.get('/personal-reports', async (req, res) => {
   try {
     const userId = req.user?.id;
-    console.log('ðŸ” Getting personal reports for user ID:', userId);
+    console.log(' Getting personal reports for user ID:', userId);
 
     if (!userId) {
       return res.status(401).json({
@@ -877,7 +877,7 @@ router.get('/personal-reports', async (req, res) => {
           status: 'completed',
           date: complaint.created_at,
           description: 'Your complaint has been received and is being reviewed',
-          icon: 'ðŸ“'
+          icon: ''
         },
         {
           id: 2,
@@ -886,7 +886,7 @@ router.get('/personal-reports', async (req, res) => {
                  workflow?.step_1_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_1_timestamp,
           description: 'Our team is reviewing your complaint for validity and priority',
-          icon: 'ðŸ”',
+          icon: '',
           officer: workflow?.step_1_officer_id ? 'Assigned to officer' : null
         },
         {
@@ -896,7 +896,7 @@ router.get('/personal-reports', async (req, res) => {
                  workflow?.step_2_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_2_timestamp,
           description: 'Field assessment and resource planning in progress',
-          icon: 'ðŸ“‹',
+          icon: '',
           officer: workflow?.step_2_officer_id ? 'Officer assigned' : null,
           estimatedCost: workflow?.step_2_estimated_cost
         },
@@ -907,7 +907,7 @@ router.get('/personal-reports', async (req, res) => {
                  workflow?.step_3_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_3_timestamp,
           description: 'Resolution work is being carried out',
-          icon: 'ðŸ”§',
+          icon: '',
           contractor: workflow?.step_3_contractor_id ? 'Contractor assigned' : null,
           startDate: workflow?.step_3_start_date
         },
@@ -917,7 +917,7 @@ router.get('/personal-reports', async (req, res) => {
           status: complaint.status === 'resolved' ? 'completed' : 'pending',
           date: workflow?.step_3_completion_date || (complaint.status === 'resolved' ? complaint.updated_at : null),
           description: complaint.status === 'resolved' ? 'Issue has been resolved successfully' : 'Awaiting completion',
-          icon: complaint.status === 'resolved' ? 'âœ…' : 'â³',
+          icon: complaint.status === 'resolved' ? '' : '',
           photos: workflow?.step_3_completion_photos
         }
       ];
@@ -939,7 +939,7 @@ router.get('/personal-reports', async (req, res) => {
       cancelled: complaints?.filter(c => c.status === 'cancelled').length || 0
     };
 
-    console.log('âœ… Personal reports fetched successfully:', stats);
+    console.log(' Personal reports fetched successfully:', stats);
 
     res.json({
       success: true,
@@ -973,7 +973,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    console.log(`ðŸ” Fetching complaint details for ID: ${complaintId}`);
+    console.log(` Fetching complaint details for ID: ${complaintId}`);
 
     // Get complaint details
     const { data: complaint, error } = await supabase
@@ -990,7 +990,7 @@ router.get('/:id', async (req, res) => {
       .single();
 
     if (error) {
-      console.error('âŒ Error fetching complaint:', error);
+      console.error(' Error fetching complaint:', error);
       return res.status(404).json({ 
         success: false, 
         message: 'Complaint not found' 
@@ -1025,14 +1025,14 @@ router.get('/:id', async (req, res) => {
     complaint.vote_count = voteCount;
     complaint.userVoted = userVoted;
 
-    console.log(`âœ… Found complaint: ${complaint.title} with ${voteCount} votes`);
+    console.log(` Found complaint: ${complaint.title} with ${voteCount} votes`);
 
     res.json({
       success: true,
       complaint: complaint
     });
   } catch (error) {
-    console.error('âŒ Get complaint error:', error);
+    console.error(' Get complaint error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -1060,7 +1060,7 @@ router.post('/vote', async (req, res) => {
     const { complaintId } = req.body;
     const userId = req.user.id;
 
-    console.log(`ðŸ—³ï¸ Processing toggle vote request:`, req.body);
+    console.log(` Processing toggle vote request:`, req.body);
     
     if (!complaintId) {
       return res.status(400).json({ 
@@ -1077,7 +1077,7 @@ router.post('/vote', async (req, res) => {
       .single();
 
     if (complaintError || !complaint) {
-      console.error('âŒ Complaint not found:', complaintError || 'No data returned');
+      console.error(' Complaint not found:', complaintError || 'No data returned');
       return res.status(404).json({ 
         success: false, 
         message: 'Complaint not found' 
@@ -1093,7 +1093,7 @@ router.post('/vote', async (req, res) => {
       .single();
 
     if (voteError && voteError.code !== 'PGRST116') { // PGRST116 = no rows returned
-      console.error('âŒ Error checking existing vote:', voteError);
+      console.error(' Error checking existing vote:', voteError);
       return res.status(500).json({ 
         success: false, 
         message: 'Error checking vote status' 
@@ -1105,7 +1105,7 @@ router.post('/vote', async (req, res) => {
     // Process vote with simple upvote/downvote toggle logic
     if (!existingVote) {
       // User hasn't voted yet - add upvote
-      console.log('ðŸ—³ï¸ Adding new upvote for user');
+      console.log(' Adding new upvote for user');
       const { data: newVote, error: insertError } = await supabase
         .from('complaint_votes')
         .insert([
@@ -1118,7 +1118,7 @@ router.post('/vote', async (req, res) => {
         .select();
 
       if (insertError) {
-        console.error('âŒ Error adding vote:', insertError);
+        console.error(' Error adding vote:', insertError);
         return res.status(500).json({ 
           success: false, 
           message: 'Failed to add vote',
@@ -1128,13 +1128,13 @@ router.post('/vote', async (req, res) => {
 
       result = newVote[0];
       result.action = 'voted';
-      console.log('âœ… Vote added successfully');
+      console.log(' Vote added successfully');
       
     } else {
       // User has already voted - toggle the vote
       if (existingVote.vote_type === 'upvote') {
         // Currently upvoted - DELETE the vote record completely (don't create downvote)
-        console.log('ðŸ—³ï¸ Removing upvote (deleting vote record)');
+        console.log(' Removing upvote (deleting vote record)');
         const { error: deleteError } = await supabase
           .from('complaint_votes')
           .delete()
@@ -1142,7 +1142,7 @@ router.post('/vote', async (req, res) => {
           .eq('user_id', userId);
 
         if (deleteError) {
-          console.error('âŒ Error deleting vote:', deleteError);
+          console.error(' Error deleting vote:', deleteError);
           return res.status(500).json({ 
             success: false, 
             message: 'Failed to remove vote',
@@ -1151,11 +1151,11 @@ router.post('/vote', async (req, res) => {
         }
 
         result = { vote_type: null, action: 'unvoted' };
-        console.log('âœ… Vote deleted successfully');
+        console.log(' Vote deleted successfully');
         
       } else {
         // Currently has downvote or other vote type - change to upvote
-        console.log('ðŸ—³ï¸ Changing to upvote');
+        console.log(' Changing to upvote');
         const { data: updatedVote, error: updateError } = await supabase
           .from('complaint_votes')
           .update({ 
@@ -1166,7 +1166,7 @@ router.post('/vote', async (req, res) => {
           .select();
 
         if (updateError) {
-          console.error('âŒ Error updating to upvote:', updateError);
+          console.error(' Error updating to upvote:', updateError);
           return res.status(500).json({ 
             success: false, 
             message: 'Failed to add vote',
@@ -1176,7 +1176,7 @@ router.post('/vote', async (req, res) => {
 
         result = updatedVote[0];
         result.action = 'voted';
-        console.log('âœ… Vote updated to upvote successfully');
+        console.log(' Vote updated to upvote successfully');
       }
     }
 
@@ -1205,7 +1205,7 @@ router.post('/vote', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('âŒ Vote processing error:', error);
+    console.error(' Vote processing error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while processing vote'
@@ -1251,7 +1251,7 @@ router.get('/vote/status', async (req, res) => {
       .eq('vote_type', 'upvote'); // Only consider upvotes
 
     if (error) {
-      console.error('âŒ Error fetching vote status:', error);
+      console.error(' Error fetching vote status:', error);
       return res.status(500).json({ 
         success: false, 
         message: 'Error fetching vote status' 
@@ -1274,7 +1274,7 @@ router.get('/vote/status', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('âŒ Vote status error:', error);
+    console.error(' Vote status error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while getting vote status'
@@ -1296,7 +1296,7 @@ router.post('/create', async (req, res) => {
  */
 router.post('/calculate-priority', async (req, res) => {
   try {
-    console.log('ðŸ§® Pre-submission priority calculation request:', req.body);
+    console.log(' Pre-submission priority calculation request:', req.body);
     
     const {
       category,
@@ -1355,4 +1355,5 @@ router.post('/calculate-priority', async (req, res) => {
 });
 
 module.exports = router;
+
 

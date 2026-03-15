@@ -1,4 +1,4 @@
-const axios = require('axios');
+﻿const axios = require('axios');
 require('dotenv').config();
 
 /**
@@ -11,7 +11,7 @@ class LocationPriorityService {
     this.baseUrl = 'https://maps.googleapis.com/maps/api/place';
     
     if (!this.apiKey) {
-      console.warn('âš ï¸ Google Places API key not found in environment variables');
+      console.warn(' Google Places API key not found in environment variables');
     }
     
     // Critical facility types with weights and dynamic search radius
@@ -87,9 +87,9 @@ class LocationPriorityService {
    */
   async calculateLocationPriority(latitude, longitude, complaintType = 'general', locationMeta = {}) {
     try {
-      console.log(`ðŸ” Analyzing location priority for: ${latitude}, ${longitude}`);
-      console.log(`ðŸ“Š Privacy Level: ${locationMeta.privacyLevel || 'not specified'}`);
-      console.log(`ðŸ“ Location Accuracy: Â±${locationMeta.radiusM || 'unknown'}m`);
+      console.log(` Analyzing location priority for: ${latitude}, ${longitude}`);
+      console.log(` Privacy Level: ${locationMeta.privacyLevel || 'not specified'}`);
+      console.log(` Location Accuracy: ${locationMeta.radiusM || 'unknown'}m`);
       
       // Validate coordinates
       if (!this.isValidCoordinates(latitude, longitude)) {
@@ -99,8 +99,8 @@ class LocationPriorityService {
       // Dynamic search radius based on area type detection
       const radiusInfo = await this.calculateSearchRadius(latitude, longitude, locationMeta);
       
-      console.log(`ðŸ” Dynamic search radius calculated: ${radiusInfo.radius}m for area type: ${radiusInfo.areaType}`);
-      console.log(`ðŸ“Š Facility density probe found: ${radiusInfo.facilityDensity} facilities in 1km`);
+      console.log(` Dynamic search radius calculated: ${radiusInfo.radius}m for area type: ${radiusInfo.areaType}`);
+      console.log(` Facility density probe found: ${radiusInfo.facilityDensity} facilities in 1km`);
       
       const facilityAnalysis = await this.analyzeFacilities(latitude, longitude, radiusInfo.radius);
       const densityBonus = this.calculateDensityBonus(facilityAnalysis);
@@ -132,7 +132,7 @@ class LocationPriorityService {
         complaintType
       };
     } catch (error) {
-      console.error('âŒ Location priority calculation failed:', error);
+      console.error(' Location priority calculation failed:', error);
       return {
         priorityScore: 0.5,
         priorityLevel: 'MEDIUM',
@@ -159,11 +159,11 @@ class LocationPriorityService {
    * Calculate search radius based on area type detection and location density
    */
   async calculateSearchRadius(latitude, longitude, locationMeta) {
-    console.log('ðŸ” Detecting area type for dynamic radius calculation...');
+    console.log(' Detecting area type for dynamic radius calculation...');
     
     // Step 1: Detect area type using initial small radius probe
     const areaType = await this.detectAreaType(latitude, longitude);
-    console.log(`ðŸ“ Area Type Detected: ${areaType.type} (${areaType.description})`);
+    console.log(` Area Type Detected: ${areaType.type} (${areaType.description})`);
     
     // Step 2: Base radius by area type
     const baseRadiusByArea = {
@@ -200,10 +200,10 @@ class LocationPriorityService {
     // Step 3: Adjust based on facility density
     if (areaType.facilityDensity < 10) {
       radius = Math.min(radius * 1.5, config.max); // Increase radius for low density
-      console.log(`ðŸ“ˆ Increased radius to ${radius}m due to low facility density (${areaType.facilityDensity} facilities)`);
+      console.log(` Increased radius to ${radius}m due to low facility density (${areaType.facilityDensity} facilities)`);
     } else if (areaType.facilityDensity > 50) {
       radius = Math.max(radius * 0.7, 500); // Decrease radius for high density
-      console.log(`ðŸ“‰ Decreased radius to ${radius}m due to high facility density (${areaType.facilityDensity} facilities)`);
+      console.log(` Decreased radius to ${radius}m due to high facility density (${areaType.facilityDensity} facilities)`);
     }
     
     // Step 4: Adjust based on location accuracy
@@ -214,8 +214,8 @@ class LocationPriorityService {
       radius += Math.min(accuracy * 0.5, 500); // Add up to 500m for poor accuracy
     }
     
-    console.log(`ðŸŽ¯ Final Search Radius: ${radius}m for ${areaType.type} area`);
-    console.log(`   ðŸ“Š Config: ${config.description}`);
+    console.log(` Final Search Radius: ${radius}m for ${areaType.type} area`);
+    console.log(`    Config: ${config.description}`);
     
     return {
       radius: Math.round(radius),
@@ -230,7 +230,7 @@ class LocationPriorityService {
    */
   async detectAreaType(latitude, longitude) {
     try {
-      console.log('ðŸ” Probing area with 1km radius to detect type...');
+      console.log(' Probing area with 1km radius to detect type...');
       
       // Use a small 1km radius to detect area characteristics
       const probeRadius = 1000;
@@ -254,11 +254,11 @@ class LocationPriorityService {
           
           await this.delay(300); // Rate limiting
         } catch (error) {
-          console.warn(`âš ï¸ Probe error for ${type}:`, error.message);
+          console.warn(` Probe error for ${type}:`, error.message);
         }
       }
       
-      console.log(`ðŸ“Š Probe Results: ${totalFacilities} facilities, ${businessTypes.size} business types`);
+      console.log(` Probe Results: ${totalFacilities} facilities, ${businessTypes.size} business types`);
       
       // Classify area type based on facility density
       let areaType;
@@ -288,7 +288,7 @@ class LocationPriorityService {
       };
       
     } catch (error) {
-      console.error('âš ï¸ Area type detection failed:', error.message);
+      console.error(' Area type detection failed:', error.message);
       return {
         type: 'unknown',
         facilityDensity: 0,
@@ -350,14 +350,14 @@ class LocationPriorityService {
   async analyzeFacilities(latitude, longitude, searchRadius = 1500) {
     const results = {};
     
-    console.log(`ðŸ” Starting facility analysis for ${latitude}, ${longitude} with ${searchRadius}m radius`);
+    console.log(` Starting facility analysis for ${latitude}, ${longitude} with ${searchRadius}m radius`);
     
     for (const [facilityType, config] of Object.entries(this.facilityConfig)) {
       try {
         // Use dynamic search radius, but respect facility-specific limits
         const effectiveRadius = Math.min(searchRadius, config.radius);
         
-        console.log(`   ðŸ¢ Searching for ${facilityType} within ${effectiveRadius}m...`);
+        console.log(`    Searching for ${facilityType} within ${effectiveRadius}m...`);
         
         const facilities = await this.searchFacilitiesWithRetry(
           latitude, 
@@ -366,7 +366,7 @@ class LocationPriorityService {
           effectiveRadius
         );
         
-        console.log(`   âœ… Found ${facilities.length} ${facilityType} facilities`);
+        console.log(`    Found ${facilities.length} ${facilityType} facilities`);
         if (facilities.length > 0) {
           console.log(`      Nearest: ${facilities[0].name} at ${facilities[0].distance}m`);
         }
@@ -385,7 +385,7 @@ class LocationPriorityService {
         await this.delay(200);
         
       } catch (error) {
-        console.error(`âš ï¸ Error analyzing ${facilityType}:`, error.message);
+        console.error(` Error analyzing ${facilityType}:`, error.message);
         results[facilityType] = { 
           count: 0, 
           facilities: [], 
@@ -397,7 +397,7 @@ class LocationPriorityService {
       }
     }
     
-    console.log(`ðŸ“Š Facility analysis complete. Total facility types processed: ${Object.keys(results).length}`);
+    console.log(` Facility analysis complete. Total facility types processed: ${Object.keys(results).length}`);
     return results;
   }
 
@@ -473,7 +473,7 @@ class LocationPriorityService {
         );
         if (hasExcluded) {
           const excludedKeyword = config.excludeKeywords.find(k => name.includes(k.toLowerCase()));
-          console.log(`âŒ Excluded ${place.name} (contains excluded keyword: ${excludedKeyword})`);
+          console.log(` Excluded ${place.name} (contains excluded keyword: ${excludedKeyword})`);
           return false;
         }
         
@@ -481,7 +481,7 @@ class LocationPriorityService {
         if (facilityType === 'hospital' || facilityType === 'school' || facilityType === 'government') {
           const transportWords = ['transport', 'logistics', 'cargo', 'travel', 'bus', 'taxi', 'auto'];
           if (transportWords.some(word => name.includes(word))) {
-            console.log(`âŒ Excluded ${place.name} (likely a transportation service, not a ${facilityType})`);
+            console.log(` Excluded ${place.name} (likely a transportation service, not a ${facilityType})`);
             return false;
           }
         }
@@ -494,7 +494,7 @@ class LocationPriorityService {
           types.some(t => t.includes(keyword.toLowerCase()))
         );
         if (!hasIncluded) {
-          console.log(`âŒ Excluded ${place.name} (missing required keywords)`);
+          console.log(` Excluded ${place.name} (missing required keywords)`);
           return false;
         }
       }
@@ -583,7 +583,7 @@ class LocationPriorityService {
     
     // Debug logging for troubleshooting
     if (isNaN(finalScore)) {
-      console.error(`ðŸš¨ NaN score detected for facility:`, {
+      console.error(` NaN score detected for facility:`, {
         nearestName: nearest.name,
         distance: nearest.distance,
         maxDistance,
@@ -609,7 +609,7 @@ class LocationPriorityService {
     let weightSum = 0;
     const facilityTypes = Object.keys(facilityAnalysis);
     
-    console.log('ðŸ“Š Calculating proximity score from facility analysis...');
+    console.log(' Calculating proximity score from facility analysis...');
     
     for (const [facilityType, analysis] of Object.entries(facilityAnalysis)) {
       if (analysis.score > 0) {
@@ -629,7 +629,7 @@ class LocationPriorityService {
     
     const finalProximityScore = Math.min(1.0, averageScore + diversityBonus);
     
-    console.log(`ðŸ“ Total proximity score: ${finalProximityScore.toFixed(3)} (base: ${averageScore.toFixed(3)}, diversity bonus: ${diversityBonus.toFixed(3)})`);
+    console.log(` Total proximity score: ${finalProximityScore.toFixed(3)} (base: ${averageScore.toFixed(3)}, diversity bonus: ${diversityBonus.toFixed(3)})`);
     
     return finalProximityScore;
   }
@@ -655,7 +655,7 @@ class LocationPriorityService {
     const totalFacilities = Object.values(facilityAnalysis)
       .reduce((sum, analysis) => sum + analysis.count, 0);
     
-    console.log(`ðŸ˜ï¸ Total facilities found: ${totalFacilities}`);
+    console.log(` Total facilities found: ${totalFacilities}`);
     
     // Progressive density bonus thresholds
     if (totalFacilities >= 50) return 0.25;      // Very high density
@@ -935,15 +935,15 @@ class LocationPriorityService {
       // Apply status multiplier
       finalScore = Math.min(100, finalScore * statusMultiplier);
       
-      console.log(`ðŸŽ¯ === 4-ALGORITHM PRIORITY CALCULATION SUMMARY ===`);
-      console.log(`ðŸ“Š Weighted Contributions:`);
-      console.log(`   ðŸ¢ Infrastructure: ${(infrastructureScore * infrastructureWeight).toFixed(2)} (${infrastructureScore.toFixed(2)} Ã— ${infrastructureWeight})`);
-      console.log(`   ðŸ“· Image Analysis: ${(imageValidationScore * imageValidationWeight).toFixed(2)} (${imageValidationScore.toFixed(2)} Ã— ${imageValidationWeight})`);
-      console.log(`   ðŸ§  Emotion Analysis: ${(emotionScore * emotionWeight).toFixed(2)} (${emotionScore.toFixed(2)} Ã— ${emotionWeight})`);
-      console.log(`   ðŸ—³ï¸ Community Votes: ${(voteScore * voteWeight).toFixed(2)} (${voteScore.toFixed(2)} Ã— ${voteWeight})`);
-      console.log(`ðŸ“ˆ Raw Combined Score: ${(finalScore / statusMultiplier).toFixed(2)}%`);
-      console.log(`âš¡ Status Multiplier: ${statusMultiplier}x (${complaintData.status})`);
-      console.log(`ðŸŽ¯ FINAL PRIORITY SCORE: ${finalScore.toFixed(2)}% â†’ ${this.getPriorityLevel(finalScore / 100)}`);
+      console.log(` === 4-ALGORITHM PRIORITY CALCULATION SUMMARY ===`);
+      console.log(` Weighted Contributions:`);
+      console.log(`    Infrastructure: ${(infrastructureScore * infrastructureWeight).toFixed(2)} (${infrastructureScore.toFixed(2)}  ${infrastructureWeight})`);
+      console.log(`    Image Analysis: ${(imageValidationScore * imageValidationWeight).toFixed(2)} (${imageValidationScore.toFixed(2)}  ${imageValidationWeight})`);
+      console.log(`    Emotion Analysis: ${(emotionScore * emotionWeight).toFixed(2)} (${emotionScore.toFixed(2)}  ${emotionWeight})`);
+      console.log(`    Community Votes: ${(voteScore * voteWeight).toFixed(2)} (${voteScore.toFixed(2)}  ${voteWeight})`);
+      console.log(` Raw Combined Score: ${(finalScore / statusMultiplier).toFixed(2)}%`);
+      console.log(` Status Multiplier: ${statusMultiplier}x (${complaintData.status})`);
+      console.log(` FINAL PRIORITY SCORE: ${finalScore.toFixed(2)}%  ${this.getPriorityLevel(finalScore / 100)}`);
       console.log(`================================================`);
       
       // Generate explanation for the priority
@@ -1102,4 +1102,5 @@ class LocationPriorityService {
 }
 
 module.exports = LocationPriorityService;
+
 

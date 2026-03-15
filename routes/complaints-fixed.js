@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 const LocationPriorityService = require('../services/LocationPriorityService');
@@ -13,7 +13,7 @@ const locationPriorityService = new LocationPriorityService();
 // Function to check the complaints table schema
 async function checkComplaintsTableSchema() {
   try {
-    console.log('📊 Checking complaints table schema...');
+    console.log(' Checking complaints table schema...');
     // Introspect the table schema to see column names
     const { data, error } = await supabase
       .from('complaints')
@@ -21,19 +21,19 @@ async function checkComplaintsTableSchema() {
       .limit(1);
       
     if (error) {
-      console.error('❌ Schema check error:', error);
+      console.error(' Schema check error:', error);
       return null;
     }
     
     if (data && data.length > 0) {
-      console.log('📋 Available columns in complaints table:', Object.keys(data[0]));
+      console.log(' Available columns in complaints table:', Object.keys(data[0]));
       return Object.keys(data[0]);
     } else {
-      console.log('ℹ️ No records in complaints table to infer schema');
+      console.log(' No records in complaints table to infer schema');
       return [];
     }
   } catch (error) {
-    console.error('❌ Schema check failed:', error);
+    console.error(' Schema check failed:', error);
     return null;
   }
 }
@@ -57,10 +57,10 @@ async function filterComplaintDataForInsertion(complaintData, availableColumns) 
       // Ensure value is a number between 0 and 9.99
       if (typeof filteredData[field] === 'number') {
         if (filteredData[field] >= 10) {
-          console.log(`⚠️ Adjusting ${field} from ${filteredData[field]} to 9.99 to prevent overflow`);
+          console.log(` Adjusting ${field} from ${filteredData[field]} to 9.99 to prevent overflow`);
           filteredData[field] = 9.99;
         } else if (filteredData[field] < 0) {
-          console.log(`⚠️ Adjusting ${field} from ${filteredData[field]} to 0 to ensure positive value`);
+          console.log(` Adjusting ${field} from ${filteredData[field]} to 0 to ensure positive value`);
           filteredData[field] = 0;
         } else {
           // Ensure we're working with 2 decimal places max
@@ -70,13 +70,13 @@ async function filterComplaintDataForInsertion(complaintData, availableColumns) 
     }
   });
   
-  console.log('📝 Filtered complaint data for insertion:', filteredData);
+  console.log(' Filtered complaint data for insertion:', filteredData);
   return filteredData;
 }
 
 router.post('/submit', async (req, res) => {
   try {
-    console.log('📝 New complaint submission:', req.body);
+    console.log(' New complaint submission:', req.body);
     
     // Check the table schema first
     const columns = await checkComplaintsTableSchema() || [];
@@ -170,7 +170,7 @@ router.post('/submit', async (req, res) => {
         .select();
       
       if (error) {
-        console.error('❌ Supabase insert error:', error);
+        console.error(' Supabase insert error:', error);
         
         // Provide more specific error handling for numeric overflow
         if (error.code === '22003' && error.message.includes('numeric field overflow')) {
@@ -181,15 +181,15 @@ router.post('/submit', async (req, res) => {
       }
       
       complaint = data;
-      console.log('✅ Complaint saved to Supabase:', complaint);
+      console.log(' Complaint saved to Supabase:', complaint);
     } catch (dbError) {
-      console.error('❌ Database operation failed:', dbError);
+      console.error(' Database operation failed:', dbError);
       
       // Attempt to get table schema directly (alternative approach)
       try {
         const { data: schema } = await supabase.rpc('get_table_columns', { table_name: 'complaints' });
         if (schema) {
-          console.log('📊 Complaints table columns:', schema);
+          console.log(' Complaints table columns:', schema);
         }
       } catch (e) {
         console.error('Could not fetch schema via RPC:', e);
@@ -223,7 +223,7 @@ router.post('/submit', async (req, res) => {
       },
       location: {
         privacyLevel: locationData.privacyLevel,
-        accuracy: locationData.accuracy ? `±${locationData.accuracy}m` : 'Unknown',
+        accuracy: locationData.accuracy ? `${locationData.accuracy}m` : 'Unknown',
         description: locationData.description
       },
       nextSteps: generateNextSteps(priorityAnalysis.priorityLevel, category),
@@ -231,7 +231,7 @@ router.post('/submit', async (req, res) => {
     
     res.json(response);
   } catch (error) {
-    console.error('❌ Complaint submission error:', error);
+    console.error(' Complaint submission error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to submit complaint',
@@ -268,7 +268,7 @@ async function calculateComprehensivePriority({ imageValidation, locationData, c
         );
         locationScore = locationPriority?.priorityScore || 0;
       } catch (locErr) {
-        console.error('❌ Location priority calculation error:', locErr);
+        console.error(' Location priority calculation error:', locErr);
         // Fallback to a default score
         locationScore = 0.5;
       }
@@ -311,7 +311,7 @@ async function calculateComprehensivePriority({ imageValidation, locationData, c
     };
     
   } catch (error) {
-    console.error('❌ Priority calculation error:', error);
+    console.error(' Priority calculation error:', error);
     
     // Fallback priority based on complaint category
     const fallbackScore = getFallbackPriority(category);
@@ -420,14 +420,14 @@ function generateNextSteps(priorityLevel, category) {
 
   if (priorityLevel === 'CRITICAL') {
     return [
-      '🚨 Your complaint has been marked as CRITICAL priority.',
+      ' Your complaint has been marked as CRITICAL priority.',
       'An urgent response team will be notified immediately.',
       'Expect a response within 24 hours.',
       'You can track real-time updates in your dashboard.'
     ];
   } else if (priorityLevel === 'HIGH') {
     return [
-      '⚠️ Your complaint has been marked as HIGH priority.',
+      ' Your complaint has been marked as HIGH priority.',
       'It will be reviewed by municipal staff within 48 hours.',
       'You will receive updates when your complaint status changes.',
       'Local authorities have been notified about this issue.'
@@ -514,3 +514,4 @@ router.post('/create', async (req, res) => {
 });
 
 module.exports = router;
+

@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const LocationPriorityService = require('../services/LocationPriorityService');
 
@@ -24,14 +24,14 @@ const locationPriorityService = new LocationPriorityService();
  */
 router.post('/calculate', async (req, res) => {
   try {
-    console.log('ðŸ” Location priority calculation request:', req.body);
+    console.log(' Location priority calculation request:', req.body);
     
     const { latitude, longitude, complaintType, locationMeta } = req.body;
     
     // Input validation
     const validationResult = validateCalculationInput(req.body);
     if (!validationResult.isValid) {
-      console.log('âŒ Validation failed:', validationResult.error);
+      console.log(' Validation failed:', validationResult.error);
       return res.status(400).json({
         success: false,
         error: validationResult.error,
@@ -39,7 +39,7 @@ router.post('/calculate', async (req, res) => {
         timestamp: new Date().toISOString()
       });
     }
-    console.log('âœ… Validation passed for complaint type:', complaintType);
+    console.log(' Validation passed for complaint type:', complaintType);
     
     // Calculate location priority score
     const startTime = Date.now();
@@ -53,9 +53,9 @@ router.post('/calculate', async (req, res) => {
         locationMeta
       );
       processingTime = Date.now() - startTime;
-      console.log(`âœ… Priority calculation completed in ${processingTime}ms`);
+      console.log(` Priority calculation completed in ${processingTime}ms`);
     } catch (calculationError) {
-      console.error('âŒ Priority calculation error:', calculationError);
+      console.error(' Priority calculation error:', calculationError);
       return res.status(400).json({
         success: false,
         error: 'Priority calculation failed: ' + calculationError.message,
@@ -111,7 +111,7 @@ router.post('/calculate', async (req, res) => {
     res.json(response);
     
   } catch (error) {
-    console.error('âŒ Location priority calculation error:', error);
+    console.error(' Location priority calculation error:', error);
     handleCalculationError(error, res);
   }
 });
@@ -196,7 +196,7 @@ router.post('/calculate-bulk', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('âŒ Bulk calculation error:', error);
+    console.error(' Bulk calculation error:', error);
     res.status(500).json({
       success: false,
       error: 'Bulk calculation failed',
@@ -228,19 +228,19 @@ router.get('/info', (req, res) => {
     ],
     privacyLevels: {
       exact: {
-        description: 'Level 1: Exact coordinates (Â±5-10m) for urgent infrastructure issues',
+        description: 'Level 1: Exact coordinates (5-10m) for urgent infrastructure issues',
         accuracy: '5-10 meters',
         useCases: ['Emergency gas leaks', 'Electrical hazards', 'Fire safety', 'Medical emergencies'],
         recommended: ['fire_hazard', 'electrical_danger', 'sewage_overflow']
       },
       street: {
-        description: 'Level 2: Street-level accuracy (Â±25m) for general civic complaints',
+        description: 'Level 2: Street-level accuracy (25m) for general civic complaints',
         accuracy: '20-30 meters', 
         useCases: ['Road maintenance', 'Streetlight issues', 'General infrastructure'],
         recommended: ['pothole', 'broken_streetlight', 'traffic_signal', 'garbage_collection']
       },
       area: {
-        description: 'Level 3: Neighborhood-level (Â±150m) for privacy-conscious reporting',
+        description: 'Level 3: Neighborhood-level (150m) for privacy-conscious reporting',
         accuracy: '100-200 meters',
         useCases: ['General area complaints', 'Privacy-sensitive reports'],
         recommended: ['noise_complaint', 'general_maintenance']
@@ -324,7 +324,7 @@ router.get('/health', async (req, res) => {
   
   try {
     // Test Google Places API connectivity
-    console.log('ðŸ¥ Running health check...');
+    console.log(' Running health check...');
     const testStartTime = Date.now();
     
     const testResult = await locationPriorityService.calculateLocationPriority(
@@ -357,7 +357,7 @@ router.get('/health', async (req, res) => {
     res.status(200).json(healthData);
     
   } catch (error) {
-    console.error('âŒ Health check failed:', error);
+    console.error(' Health check failed:', error);
     
     healthData.status = 'unhealthy';
     healthData.checks = {
@@ -422,12 +422,12 @@ router.get('/metrics', (req, res) => {
  * Validate input for location priority calculation
  */
 function validateCalculationInput(input) {
-  console.log('ðŸ” Validating input:', JSON.stringify(input, null, 2));
+  console.log(' Validating input:', JSON.stringify(input, null, 2));
   const { latitude, longitude, complaintType, locationMeta } = input;
   
   // Required fields validation
   if (!latitude || !longitude) {
-    console.log('âŒ Missing coordinates validation failed');
+    console.log(' Missing coordinates validation failed');
     return {
       isValid: false,
       error: 'Latitude and longitude are required',
@@ -436,7 +436,7 @@ function validateCalculationInput(input) {
   }
   
   if (!complaintType) {
-    console.log('âŒ Missing complaint type validation failed');
+    console.log(' Missing complaint type validation failed');
     return {
       isValid: false,
       error: 'Complaint type is required',
@@ -480,9 +480,9 @@ function validateCalculationInput(input) {
     'others'
   ];
   
-  console.log('ðŸ” Checking complaint type:', complaintType, 'in valid types:', validComplaintTypes);
+  console.log(' Checking complaint type:', complaintType, 'in valid types:', validComplaintTypes);
   if (!validComplaintTypes.includes(complaintType)) {
-    console.log('âŒ Invalid complaint type validation failed');
+    console.log(' Invalid complaint type validation failed');
     return {
       isValid: false,
       error: `Invalid complaint type. Supported types: ${validComplaintTypes.join(', ')}`,
@@ -597,7 +597,7 @@ function handleCalculationError(error, res) {
  */
 router.post('/comprehensive', async (req, res) => {
   try {
-    console.log('ðŸ§  Comprehensive priority calculation request:', req.body);
+    console.log(' Comprehensive priority calculation request:', req.body);
     
     const { 
       latitude, 
@@ -640,7 +640,7 @@ router.post('/comprehensive', async (req, res) => {
     );
     const processingTime = Date.now() - startTime;
     
-    console.log(`âœ… Comprehensive priority calculation completed in ${processingTime}ms`);
+    console.log(` Comprehensive priority calculation completed in ${processingTime}ms`);
     
     // Format response
     const response = {
@@ -702,4 +702,5 @@ router.post('/comprehensive', async (req, res) => {
 });
 
 module.exports = router;
+
 

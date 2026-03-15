@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 
@@ -9,7 +9,7 @@ const { supabase } = require('../config/supabase');
  */
 router.post('/submit', async (req, res) => {
   try {
-    console.log('📝 Processing feedback submission:', req.body);
+    console.log(' Processing feedback submission:', req.body);
     
     const { complaintId, rating, feedback, improvements, submittedAt } = req.body;
     
@@ -60,9 +60,9 @@ router.post('/submit', async (req, res) => {
       .select();
       
     if (insertError) {
-      console.error('❌ Error inserting feedback:', insertError);
+      console.error(' Error inserting feedback:', insertError);
       
-      console.log('✅ Fallback: Faking successful feedback submission per user request');
+      console.log(' Fallback: Faking successful feedback submission per user request');
       return res.status(201).json({
         success: true,
         message: 'Feedback submitted successfully',
@@ -75,7 +75,7 @@ router.post('/submit', async (req, res) => {
       });
     }
     
-    console.log('✅ Feedback submitted successfully:', newFeedback?.[0]?.id);
+    console.log(' Feedback submitted successfully:', newFeedback?.[0]?.id);
     
     // Return success response
     return res.status(201).json({
@@ -90,7 +90,7 @@ router.post('/submit', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error processing feedback submission:', error);
+    console.error(' Error processing feedback submission:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while processing feedback'
@@ -104,7 +104,7 @@ router.post('/submit', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
-    console.log('📊 Getting feedback statistics...');
+    console.log(' Getting feedback statistics...');
     
     // Get overall statistics
     const { data: stats, error: statsError } = await supabase
@@ -112,7 +112,7 @@ router.get('/stats', async (req, res) => {
       .select('rating, created_at');
       
     if (statsError) {
-      console.error('❌ Error getting feedback stats:', statsError);
+      console.error(' Error getting feedback stats:', statsError);
       return res.status(500).json({
         success: false,
         message: 'Failed to retrieve feedback statistics'
@@ -148,7 +148,7 @@ router.get('/stats', async (req, res) => {
       recentFeedback: recentError ? [] : recentFeedback
     };
     
-    console.log('✅ Feedback statistics retrieved');
+    console.log(' Feedback statistics retrieved');
     
     return res.status(200).json({
       success: true,
@@ -156,7 +156,7 @@ router.get('/stats', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error getting feedback statistics:', error);
+    console.error(' Error getting feedback statistics:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while retrieving statistics'
@@ -165,3 +165,4 @@ router.get('/stats', async (req, res) => {
 });
 
 module.exports = router;
+

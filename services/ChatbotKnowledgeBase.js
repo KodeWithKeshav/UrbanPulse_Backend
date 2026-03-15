@@ -1,4 +1,4 @@
-// UrbanPulse Chatbot Knowledge Base
+﻿// UrbanPulse Chatbot Knowledge Base
 // Comprehensive information about app features, civic issues, and user guidance
 
 const CIVIC_KNOWLEDGE_BASE = {
@@ -24,7 +24,7 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['submit', 'report', 'complaint', 'how to submit', 'file complaint', 'report issue', 'pothole', 'pot hole', 'road damage', 'road issue', 'broken road'],
     responses: [
       {
-        text: "**How to Submit a Complaint:**\n\n1. **Select Category** - Choose from Fire Hazard, Electrical Danger, Pothole, etc.\n2. **Auto Location** - We'll capture your location for priority assessment\n3. **Add Title & Description** - Use voice input in 11+ languages\n4. **Take Photo** - Our AI validates it's a real civic issue\n5. **AI Processing** - Get instant priority score and validation\n6. **Submit** - Your complaint is routed to authorities\n\n**Features:**\nâ€¢ Voice input in Hindi, Tamil, Telugu, English, etc.\nâ€¢ AI image validation\nâ€¢ Priority scoring based on location\nâ€¢ Privacy-protected location capture",
+        text: "**How to Submit a Complaint:**\n\n1. **Select Category** - Choose from Fire Hazard, Electrical Danger, Pothole, etc.\n2. **Auto Location** - We'll capture your location for priority assessment\n3. **Add Title & Description** - Use voice input in 11+ languages\n4. **Take Photo** - Our AI validates it's a real civic issue\n5. **AI Processing** - Get instant priority score and validation\n6. **Submit** - Your complaint is routed to authorities\n\n**Features:**\n Voice input in Hindi, Tamil, Telugu, English, etc.\n AI image validation\n Priority scoring based on location\n Privacy-protected location capture",
         confidence: 0.98,
         category: 'submission_guide',
         suggestedActions: [
@@ -40,7 +40,7 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['pothole', 'pot hole', 'road hole', 'road damage', 'broken road', 'street damage', 'pavement damage'],
     responses: [
       {
-        text: "**Reporting Potholes:**\n\n**Step-by-Step:**\n1. Open UrbanPulse app\n2. Tap 'Submit Complaint'\n3. Select 'Pothole' category\n4. Take clear photo showing the hole\n5. Add description (voice input available)\n6. Confirm location is accurate\n7. Submit - gets routed to road dept!\n\n**Pro Tips:**\nâ€¢ Photo from multiple angles\nâ€¢ Include size reference (coin, shoe)\nâ€¢ Mention traffic impact\nâ€¢ Use voice input in your language\nâ€¢ Vote on similar nearby potholes\n\n**Priority Factors:**\nâ€¢ Size and depth\nâ€¢ Traffic volume\nâ€¢ Near schools/hospitals\nâ€¢ Community votes",
+        text: "**Reporting Potholes:**\n\n**Step-by-Step:**\n1. Open UrbanPulse app\n2. Tap 'Submit Complaint'\n3. Select 'Pothole' category\n4. Take clear photo showing the hole\n5. Add description (voice input available)\n6. Confirm location is accurate\n7. Submit - gets routed to road dept!\n\n**Pro Tips:**\n Photo from multiple angles\n Include size reference (coin, shoe)\n Mention traffic impact\n Use voice input in your language\n Vote on similar nearby potholes\n\n**Priority Factors:**\n Size and depth\n Traffic volume\n Near schools/hospitals\n Community votes",
         confidence: 0.95,
         category: 'pothole_guide',
         suggestedActions: [
@@ -56,12 +56,12 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['civic issues', 'categories', 'what can report', 'types of complaints', 'issue types'],
     responses: [
       {
-        text: "ðŸ›ï¸ **Civic Issues You Can Report:**\n\nðŸš¨ **Urgent Issues:**\nâ€¢ Fire Hazard\nâ€¢ Electrical Danger\nâ€¢ Sewage Overflow\n\nâš ï¸ **Safety Issues:**\nâ€¢ Broken Streetlight\nâ€¢ Traffic Signal Problems\nâ€¢ Road Damage\n\nðŸ“‹ **General Issues:**\nâ€¢ Potholes\nâ€¢ Garbage Collection\nâ€¢ Water Leakage\nâ€¢ Tree Issues\nâ€¢ Flooding\nâ€¢ Others\n\nðŸ’¡ Each category has different priority levels and response times. Urgent issues get immediate attention!",
+        text: " **Civic Issues You Can Report:**\n\n **Urgent Issues:**\n Fire Hazard\n Electrical Danger\n Sewage Overflow\n\n **Safety Issues:**\n Broken Streetlight\n Traffic Signal Problems\n Road Damage\n\n **General Issues:**\n Potholes\n Garbage Collection\n Water Leakage\n Tree Issues\n Flooding\n Others\n\n Each category has different priority levels and response times. Urgent issues get immediate attention!",
         confidence: 0.92,
         category: 'civic_categories',
         suggestedActions: [
-          { type: 'submit_complaint', label: 'ðŸš¨ Report Urgent Issue' },
-          { type: 'view_feed', label: 'ðŸ‘€ See Examples' }
+          { type: 'submit_complaint', label: ' Report Urgent Issue' },
+          { type: 'view_feed', label: ' See Examples' }
         ]
       }
     ]
@@ -72,12 +72,12 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['vote', 'voting', 'upvote', 'support', 'priority', 'how voting works'],
     responses: [
       {
-        text: "ðŸ‘ **How Voting Works:**\n\nðŸ“Š **Upvote Complaints** - Support issues that affect you\nðŸ”¢ **Vote Count** - Higher votes = higher priority\nðŸŽ¯ **Smart Priority** - Combines votes + location + AI analysis\nðŸ“ **Nearby Focus** - Vote on issues within 5km\nâš–ï¸ **Fair System** - One vote per user per complaint\nðŸ“ˆ **Real Impact** - Your vote helps prioritize municipal response\n\nâœ¨ **Benefits:**\nâ€¢ Amplify community voice\nâ€¢ Faster resolution for popular issues\nâ€¢ Democratic prioritization\nâ€¢ Transparency in civic engagement",
+        text: " **How Voting Works:**\n\n **Upvote Complaints** - Support issues that affect you\n **Vote Count** - Higher votes = higher priority\n **Smart Priority** - Combines votes + location + AI analysis\n **Nearby Focus** - Vote on issues within 5km\n **Fair System** - One vote per user per complaint\n **Real Impact** - Your vote helps prioritize municipal response\n\n **Benefits:**\n Amplify community voice\n Faster resolution for popular issues\n Democratic prioritization\n Transparency in civic engagement",
         confidence: 0.90,
         category: 'voting_system',
         suggestedActions: [
-          { type: 'view_feed', label: 'ðŸ‘ Start Voting' },
-          { type: 'view_map', label: 'ðŸ—ºï¸ Find Issues to Vote On' }
+          { type: 'view_feed', label: ' Start Voting' },
+          { type: 'view_map', label: ' Find Issues to Vote On' }
         ]
       }
     ]
@@ -88,11 +88,11 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['voice', 'speech', 'language', 'hindi', 'tamil', 'telugu', 'speak', 'microphone'],
     responses: [
       {
-        text: "ðŸŽ¤ **Voice Input Features:**\n\nðŸŒ **Supported Languages:**\nâ€¢ Hindi (à¤¹à¤¿à¤‚à¤¦à¥€)\nâ€¢ Tamil (à®¤à®®à®¿à®´à¯)\nâ€¢ Telugu (à°¤à±†à°²à±à°—à±)\nâ€¢ English\nâ€¢ Kannada (à²•à²¨à³à²¨à²¡)\nâ€¢ Marathi (à¤®à¤°à¤¾à¤ à¥€)\nâ€¢ Bengali (à¦¬à¦¾à¦‚à¦²à¦¾)\nâ€¢ Gujarati (àª—à«àªœàª°àª¾àª¤à«€)\nâ€¢ Malayalam (à´®à´²à´¯à´¾à´³à´‚)\nâ€¢ Punjabi (à¨ªà©°à¨œà¨¾à¨¬à©€)\nâ€¢ Urdu (Ø§Ø±Ø¯Ùˆ)\n\nðŸ”§ **How to Use:**\n1. Select your language\n2. Tap the microphone icon\n3. Speak clearly\n4. AI converts speech to text\n5. Review and submit\n\nðŸ’¡ Perfect for users who prefer speaking over typing!",
+        text: " **Voice Input Features:**\n\n **Supported Languages:**\n Hindi ()\n Tamil ()\n Telugu ()\n English\n Kannada ()\n Marathi ()\n Bengali ()\n Gujarati ()\n Malayalam ()\n Punjabi ()\n Urdu ()\n\n **How to Use:**\n1. Select your language\n2. Tap the microphone icon\n3. Speak clearly\n4. AI converts speech to text\n5. Review and submit\n\n Perfect for users who prefer speaking over typing!",
         confidence: 0.88,
         category: 'voice_features',
         suggestedActions: [
-          { type: 'submit_complaint', label: 'ðŸŽ¤ Try Voice Input' }
+          { type: 'submit_complaint', label: ' Try Voice Input' }
         ]
       }
     ]
@@ -103,11 +103,11 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['location', 'privacy', 'gps', 'tracking', 'address', 'where', 'safety'],
     responses: [
       {
-        text: "ðŸ“ **Location & Privacy:**\n\nðŸ”’ **Privacy Levels:**\nâ€¢ **Exact** - For urgent issues (Fire, Electrical)\nâ€¢ **Street** - General issues (Road, Pothole)\nâ€¢ **Area** - Sensitive locations\nâ€¢ **City** - Maximum privacy\n\nâœ… **How We Protect You:**\nâ€¢ Automatic privacy level selection\nâ€¢ No personal data stored\nâ€¢ Location used only for routing\nâ€¢ Street-level accuracy (Â±25m)\nâ€¢ Option to recapture location\n\nðŸŽ¯ **Why Location Matters:**\nâ€¢ Routes to correct municipal office\nâ€¢ Priority scoring near critical infrastructure\nâ€¢ Emergency response coordination\nâ€¢ Prevents duplicate reports",
+        text: " **Location & Privacy:**\n\n **Privacy Levels:**\n **Exact** - For urgent issues (Fire, Electrical)\n **Street** - General issues (Road, Pothole)\n **Area** - Sensitive locations\n **City** - Maximum privacy\n\n **How We Protect You:**\n Automatic privacy level selection\n No personal data stored\n Location used only for routing\n Street-level accuracy (25m)\n Option to recapture location\n\n **Why Location Matters:**\n Routes to correct municipal office\n Priority scoring near critical infrastructure\n Emergency response coordination\n Prevents duplicate reports",
         confidence: 0.94,
         category: 'location_privacy',
         suggestedActions: [
-          { type: 'submit_complaint', label: 'ðŸ“ Test Location Capture' }
+          { type: 'submit_complaint', label: ' Test Location Capture' }
         ]
       }
     ]
@@ -118,11 +118,11 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['image', 'photo', 'ai', 'validation', 'picture', 'camera', 'upload'],
     responses: [
       {
-        text: "ðŸ“¸ **AI Image Validation:**\n\nðŸ¤– **Smart Detection:**\nâ€¢ Verifies real civic issues\nâ€¢ Identifies problem types\nâ€¢ Provides confidence scores\nâ€¢ Prevents spam/irrelevant photos\n\nâœ… **Validation Process:**\n1. Upload/take photo\n2. AI analyzes image content\n3. Detects civic issue type\n4. Shows confidence percentage\n5. Allows submission if valid\n\nðŸŽ¯ **Supported Issues:**\nâ€¢ Road damage, potholes\nâ€¢ Garbage, sewage\nâ€¢ Electrical hazards\nâ€¢ Water leaks\nâ€¢ Structural damage\nâ€¢ Traffic problems\n\nðŸ’¡ Even if validation fails, you can still submit for urgent issues!",
+        text: " **AI Image Validation:**\n\n **Smart Detection:**\n Verifies real civic issues\n Identifies problem types\n Provides confidence scores\n Prevents spam/irrelevant photos\n\n **Validation Process:**\n1. Upload/take photo\n2. AI analyzes image content\n3. Detects civic issue type\n4. Shows confidence percentage\n5. Allows submission if valid\n\n **Supported Issues:**\n Road damage, potholes\n Garbage, sewage\n Electrical hazards\n Water leaks\n Structural damage\n Traffic problems\n\n Even if validation fails, you can still submit for urgent issues!",
         confidence: 0.89,
         category: 'image_ai',
         suggestedActions: [
-          { type: 'submit_complaint', label: 'ðŸ“¸ Try Image Upload' }
+          { type: 'submit_complaint', label: ' Try Image Upload' }
         ]
       }
     ]
@@ -133,12 +133,12 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['map', 'location view', 'see complaints', 'nearby issues', 'visual', 'markers'],
     responses: [
       {
-        text: "ðŸ—ºï¸ **Interactive Complaint Map:**\n\nðŸ“ **Map Features:**\nâ€¢ Real-time complaint markers\nâ€¢ Color-coded by status (Pending/In Progress/Resolved)\nâ€¢ Cluster view for dense areas\nâ€¢ Click markers for details\nâ€¢ Auto-fit to show all complaints\nâ€¢ User location indicator\n\nðŸŽ¨ **Status Colors:**\nâ€¢ ðŸ”´ Red - Pending\nâ€¢ ðŸŸ¡ Yellow - In Progress\nâ€¢ ðŸŸ¢ Green - Resolved\nâ€¢ ðŸ”µ Blue - Under Review\n\nâœ¨ **Smart Features:**\nâ€¢ Auto-zoom to your area\nâ€¢ Filter by complaint type\nâ€¢ Distance-based clustering\nâ€¢ Smooth animations\nâ€¢ Offline caching",
+        text: " **Interactive Complaint Map:**\n\n **Map Features:**\n Real-time complaint markers\n Color-coded by status (Pending/In Progress/Resolved)\n Cluster view for dense areas\n Click markers for details\n Auto-fit to show all complaints\n User location indicator\n\n **Status Colors:**\n  Red - Pending\n  Yellow - In Progress\n  Green - Resolved\n  Blue - Under Review\n\n **Smart Features:**\n Auto-zoom to your area\n Filter by complaint type\n Distance-based clustering\n Smooth animations\n Offline caching",
         confidence: 0.91,
         category: 'map_guide',
         suggestedActions: [
-          { type: 'view_map', label: 'ðŸ—ºï¸ Open Map' },
-          { type: 'submit_complaint', label: 'ðŸ“ Add to Map' }
+          { type: 'view_map', label: ' Open Map' },
+          { type: 'submit_complaint', label: ' Add to Map' }
         ]
       }
     ]
@@ -149,12 +149,12 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['feed', 'social', 'instagram', 'scroll', 'posts', 'timeline', 'nearby'],
     responses: [
       {
-        text: "ðŸ“± **Instagram-Style Feed:**\n\nðŸ“Š **Feed Features:**\nâ€¢ Beautiful card-based layout\nâ€¢ Nearby complaints (5km radius)\nâ€¢ User profiles and avatars\nâ€¢ Time stamps and status badges\nâ€¢ Category icons and descriptions\nâ€¢ Smooth scroll animations\nâ€¢ Pull-to-refresh\n\nðŸ‘¥ **Social Elements:**\nâ€¢ Upvote directly from feed\nâ€¢ User information display\nâ€¢ Location details\nâ€¢ Priority indicators\nâ€¢ Progress tracking\nâ€¢ Engagement metrics\n\nâœ¨ **Smart Sorting:**\nâ€¢ Distance-based priority\nâ€¢ Recent activity first\nâ€¢ High-voted issues prominent\nâ€¢ Emergency issues at top",
+        text: " **Instagram-Style Feed:**\n\n **Feed Features:**\n Beautiful card-based layout\n Nearby complaints (5km radius)\n User profiles and avatars\n Time stamps and status badges\n Category icons and descriptions\n Smooth scroll animations\n Pull-to-refresh\n\n **Social Elements:**\n Upvote directly from feed\n User information display\n Location details\n Priority indicators\n Progress tracking\n Engagement metrics\n\n **Smart Sorting:**\n Distance-based priority\n Recent activity first\n High-voted issues prominent\n Emergency issues at top",
         confidence: 0.87,
         category: 'feed_guide',
         suggestedActions: [
-          { type: 'view_feed', label: 'ðŸ“± Open Feed' },
-          { type: 'submit_complaint', label: 'ðŸ“ Add to Feed' }
+          { type: 'view_feed', label: ' Open Feed' },
+          { type: 'submit_complaint', label: ' Add to Feed' }
         ]
       }
     ]
@@ -165,12 +165,12 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['admin', 'transparency', 'government', 'municipal', 'authority', 'response'],
     responses: [
       {
-        text: "ðŸ›ï¸ **Transparency & Accountability:**\n\nðŸ‘¥ **Admin Features:**\nâ€¢ Priority queue management\nâ€¢ Real-time complaint tracking\nâ€¢ Citizen communication tools\nâ€¢ Progress reporting\nâ€¢ Resource allocation\nâ€¢ Performance analytics\n\nðŸ“Š **Public Transparency:**\nâ€¢ Open complaint database\nâ€¢ Response time tracking\nâ€¢ Resolution statistics\nâ€¢ Municipal performance metrics\nâ€¢ Public voting influence\nâ€¢ Community engagement data\n\nâœ… **Accountability Measures:**\nâ€¢ Automated routing to departments\nâ€¢ SLA tracking\nâ€¢ Public progress updates\nâ€¢ Feedback collection\nâ€¢ Performance reporting",
+        text: " **Transparency & Accountability:**\n\n **Admin Features:**\n Priority queue management\n Real-time complaint tracking\n Citizen communication tools\n Progress reporting\n Resource allocation\n Performance analytics\n\n **Public Transparency:**\n Open complaint database\n Response time tracking\n Resolution statistics\n Municipal performance metrics\n Public voting influence\n Community engagement data\n\n **Accountability Measures:**\n Automated routing to departments\n SLA tracking\n Public progress updates\n Feedback collection\n Performance reporting",
         confidence: 0.86,
         category: 'transparency',
         suggestedActions: [
-          { type: 'view_feed', label: 'ðŸ“Š See Public Data' },
-          { type: 'personal_reports', label: 'ðŸ“ˆ Track My Reports' }
+          { type: 'view_feed', label: ' See Public Data' },
+          { type: 'personal_reports', label: ' Track My Reports' }
         ]
       }
     ]
@@ -181,11 +181,11 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['help', 'problem', 'error', 'not working', 'bug', 'issue', 'fix', 'troubleshoot'],
     responses: [
       {
-        text: "ðŸ”§ **Troubleshooting Guide:**\n\nðŸ“± **Common Issues:**\nâ€¢ **Location not working** - Enable GPS, check permissions\nâ€¢ **Camera issues** - Grant camera permission\nâ€¢ **Voice input failing** - Allow microphone access\nâ€¢ **Image upload slow** - Check internet connection\nâ€¢ **Map not loading** - Refresh app, check network\n\nðŸ”„ **Quick Fixes:**\nâ€¢ Restart the app\nâ€¢ Check internet connection\nâ€¢ Update app permissions\nâ€¢ Clear app cache\nâ€¢ Ensure latest version\n\nâš¡ **Emergency Bypass:**\nâ€¢ Submit without photo if urgent\nâ€¢ Use manual location entry\nâ€¢ Contact support via email\nâ€¢ Call emergency services for critical issues",
+        text: " **Troubleshooting Guide:**\n\n **Common Issues:**\n **Location not working** - Enable GPS, check permissions\n **Camera issues** - Grant camera permission\n **Voice input failing** - Allow microphone access\n **Image upload slow** - Check internet connection\n **Map not loading** - Refresh app, check network\n\n **Quick Fixes:**\n Restart the app\n Check internet connection\n Update app permissions\n Clear app cache\n Ensure latest version\n\n **Emergency Bypass:**\n Submit without photo if urgent\n Use manual location entry\n Contact support via email\n Call emergency services for critical issues",
         confidence: 0.92,
         category: 'troubleshooting',
         suggestedActions: [
-          { type: 'submit_complaint', label: 'ðŸ”„ Try Again' }
+          { type: 'submit_complaint', label: ' Try Again' }
         ]
       }
     ]
@@ -196,11 +196,11 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['emergency', 'urgent', 'fire', 'electrical', 'danger', 'safety', 'critical'],
     responses: [
       {
-        text: "ðŸš¨ **Emergency Reporting:**\n\nâš¡ **Urgent Categories:**\nâ€¢ **Fire Hazard** - Immediate response\nâ€¢ **Electrical Danger** - Safety priority\nâ€¢ **Sewage Overflow** - Health emergency\nâ€¢ **Gas Leak** - Critical safety\nâ€¢ **Structural Collapse** - Immediate danger\n\nðŸš¨ **Emergency Process:**\n1. Select urgent category\n2. Exact location capture\n3. Immediate photo upload\n4. Instant AI validation\n5. Direct routing to emergency services\n6. Real-time tracking\n\nâš ï¸ **Important:**\nâ€¢ For life-threatening emergencies, call 112/911 first\nâ€¢ Use app for infrastructure emergencies\nâ€¢ Provides additional documentation\nâ€¢ Ensures follow-up tracking",
+        text: " **Emergency Reporting:**\n\n **Urgent Categories:**\n **Fire Hazard** - Immediate response\n **Electrical Danger** - Safety priority\n **Sewage Overflow** - Health emergency\n **Gas Leak** - Critical safety\n **Structural Collapse** - Immediate danger\n\n **Emergency Process:**\n1. Select urgent category\n2. Exact location capture\n3. Immediate photo upload\n4. Instant AI validation\n5. Direct routing to emergency services\n6. Real-time tracking\n\n **Important:**\n For life-threatening emergencies, call 112/911 first\n Use app for infrastructure emergencies\n Provides additional documentation\n Ensures follow-up tracking",
         confidence: 0.96,
         category: 'emergency_guide',
         suggestedActions: [
-          { type: 'submit_complaint', label: 'ðŸš¨ Report Emergency' }
+          { type: 'submit_complaint', label: ' Report Emergency' }
         ]
       }
     ]
@@ -265,23 +265,23 @@ class ChatbotKnowledgeMatcher {
 
     if (isGreeting) {
       return {
-        text: "ðŸ‘‹ Hello! I'm your UrbanPulse Assistant. I can help you with:\n\nðŸ“ Submitting complaints\nðŸ—ºï¸ Using the map\nðŸ‘ Voting system\nðŸŽ¤ Voice input\nðŸ“¸ Image validation\nðŸ”§ Troubleshooting\n\nWhat would you like to know?",
+        text: " Hello! I'm your UrbanPulse Assistant. I can help you with:\n\n Submitting complaints\n Using the map\n Voting system\n Voice input\n Image validation\n Troubleshooting\n\nWhat would you like to know?",
         confidence: 0.8,
         category: 'greeting',
         suggestedActions: [
-          { type: 'submit_complaint', label: 'ðŸ“ Submit Complaint' },
-          { type: 'view_feed', label: 'ðŸ“± View Feed' }
+          { type: 'submit_complaint', label: ' Submit Complaint' },
+          { type: 'view_feed', label: ' View Feed' }
         ]
       };
     }
 
     return {
-      text: "ðŸ¤” I'm not sure about that specific question, but I can help with:\n\nðŸ“± **App Features** - Navigation and functionality\nðŸ“ **Complaint Submission** - Step-by-step guide\nðŸ›ï¸ **Civic Issues** - What you can report\nðŸ‘ **Voting** - How the system works\nðŸŽ¤ **Voice Input** - Multi-language support\nðŸ”§ **Troubleshooting** - Fixing common issues\n\nTry asking about any of these topics!",
+      text: " I'm not sure about that specific question, but I can help with:\n\n **App Features** - Navigation and functionality\n **Complaint Submission** - Step-by-step guide\n **Civic Issues** - What you can report\n **Voting** - How the system works\n **Voice Input** - Multi-language support\n **Troubleshooting** - Fixing common issues\n\nTry asking about any of these topics!",
       confidence: 0.5,
       category: 'generic_help',
       suggestedActions: [
-        { type: 'submit_complaint', label: 'ðŸ“ How to Submit?' },
-        { type: 'view_feed', label: 'ðŸ“± App Features?' }
+        { type: 'submit_complaint', label: ' How to Submit?' },
+        { type: 'view_feed', label: ' App Features?' }
       ]
     };
   }
@@ -316,4 +316,5 @@ class ChatbotKnowledgeMatcher {
 }
 
 module.exports = { CIVIC_KNOWLEDGE_BASE, ChatbotKnowledgeMatcher };
+
 

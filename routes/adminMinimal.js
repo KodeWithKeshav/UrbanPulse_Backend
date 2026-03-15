@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 
 // Test endpoint
@@ -34,7 +34,7 @@ router.get('/dashboard/overview', async (req, res) => {
     const pendingComplaints = complaints?.filter(c => c.status === 'pending').length || 0;
     const inProgressComplaints = complaints?.filter(c => c.status === 'in_progress').length || 0;
 
-    console.log('📊 Dashboard stats:', {
+    console.log(' Dashboard stats:', {
       total: totalComplaints,
       pending: pendingComplaints,
       inProgress: inProgressComplaints,
@@ -73,7 +73,7 @@ router.get('/complaints/priority-queue', async (req, res) => {
     const { limit, page = 1, search, location, category, status } = req.query;
     const supabase = req.app.get('supabase');
 
-    console.log('🔍 Fetching complaints for priority queue with filters:', { search, location, category, status });
+    console.log(' Fetching complaints for priority queue with filters:', { search, location, category, status });
 
     // First get ALL complaints without joins to avoid schema issues
     let complaintsQuery = supabase
@@ -119,11 +119,11 @@ router.get('/complaints/priority-queue', async (req, res) => {
       });
     }
 
-    console.log(`📋 Found ${complaints?.length || 0} complaints`);
+    console.log(` Found ${complaints?.length || 0} complaints`);
 
     // Get unique user IDs
     const userIds = [...new Set(complaints?.map(c => c.user_id).filter(Boolean))];
-    console.log(`👥 Need to fetch ${userIds.length} unique users`);
+    console.log(` Need to fetch ${userIds.length} unique users`);
 
     // Fetch user details separately
     let usersData = {};
@@ -141,7 +141,7 @@ router.get('/complaints/priority-queue', async (req, res) => {
         users?.forEach(user => {
           usersData[user.id] = user;
         });
-        console.log(`✅ Successfully fetched ${users?.length || 0} user records`);
+        console.log(` Successfully fetched ${users?.length || 0} user records`);
       }
     }
 
@@ -156,7 +156,7 @@ router.get('/complaints/priority-queue', async (req, res) => {
       };
     }) || [];
 
-    console.log('✅ Priority queue response ready');
+    console.log(' Priority queue response ready');
 
     res.json({
       success: true,
@@ -186,7 +186,7 @@ router.get('/citizens', async (req, res) => {
     const { limit, search, sort = 'recent' } = req.query;
     const supabase = req.app.get('supabase');
 
-    console.log('📊 Citizens endpoint called with params:', { limit, search, sort });
+    console.log(' Citizens endpoint called with params:', { limit, search, sort });
 
     // Build query for users
     let query = supabase
@@ -214,7 +214,7 @@ router.get('/citizens', async (req, res) => {
 
     const { data: users, error: usersError } = await query;
 
-    console.log('📊 Users query result:', { users: users?.length, error: usersError?.message });
+    console.log(' Users query result:', { users: users?.length, error: usersError?.message });
 
     if (usersError) {
       console.error('Citizens query error:', usersError);
@@ -265,7 +265,7 @@ router.get('/citizens', async (req, res) => {
       };
     }) || [];
 
-    console.log('📊 Sending citizens response with count:', citizens.length);
+    console.log(' Sending citizens response with count:', citizens.length);
 
     res.json({
       success: true,
@@ -296,7 +296,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
     const { citizenId } = req.params;
     const supabase = req.app.get('supabase');
 
-    console.log('🔍 Getting citizen details for ID:', citizenId);
+    console.log(' Getting citizen details for ID:', citizenId);
 
     // Get citizen details
     const { data: citizen, error: citizenError } = await supabase
@@ -358,7 +358,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
           status: 'completed',
           date: complaint.created_at,
           description: 'Your complaint has been received and is being reviewed',
-          icon: '📝'
+          icon: ''
         },
         {
           id: 2,
@@ -367,7 +367,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
                  workflow?.step_1_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_1_timestamp,
           description: 'Our team is reviewing your complaint for validity and priority',
-          icon: '🔍',
+          icon: '',
           officer: workflow?.step_1_officer_id ? 'Assigned to officer' : null
         },
         {
@@ -377,7 +377,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
                  workflow?.step_2_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_2_timestamp,
           description: 'Field assessment and resource planning in progress',
-          icon: '📋',
+          icon: '',
           officer: workflow?.step_2_officer_id ? 'Officer assigned' : null,
           estimatedCost: workflow?.step_2_estimated_cost
         },
@@ -388,7 +388,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
                  workflow?.step_3_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_3_timestamp,
           description: 'Resolution work is being carried out',
-          icon: '🔧',
+          icon: '',
           contractor: workflow?.step_3_contractor_id ? 'Contractor assigned' : null,
           startDate: workflow?.step_3_start_date
         },
@@ -398,7 +398,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
           status: complaint.status === 'resolved' ? 'completed' : 'pending',
           date: workflow?.step_3_completion_date || (complaint.status === 'resolved' ? complaint.updated_at : null),
           description: complaint.status === 'resolved' ? 'Issue has been resolved successfully' : 'Awaiting completion',
-          icon: complaint.status === 'resolved' ? '✅' : '⏳',
+          icon: complaint.status === 'resolved' ? '' : '',
           photos: workflow?.step_3_completion_photos
         }
       ];
@@ -444,7 +444,7 @@ router.delete('/citizens/:citizenId', async (req, res) => {
     const { citizenId } = req.params;
     const supabase = req.app.get('supabase');
 
-    console.log('🗑️ Deleting citizen and all associated data for ID:', citizenId);
+    console.log(' Deleting citizen and all associated data for ID:', citizenId);
 
     // Start transaction-like operations (delete in reverse dependency order)
     
@@ -506,7 +506,7 @@ router.delete('/citizens/:citizenId', async (req, res) => {
       });
     }
 
-    console.log('✅ Successfully deleted citizen and all associated data');
+    console.log(' Successfully deleted citizen and all associated data');
 
     res.json({
       success: true,
@@ -528,7 +528,7 @@ router.get('/complaints/:complaintId/details', async (req, res) => {
     const { complaintId } = req.params;
     const supabase = req.app.get('supabase');
 
-    console.log('🔍 Fetching complaint details for ID:', complaintId);
+    console.log(' Fetching complaint details for ID:', complaintId);
 
     // Get complaint details
     const { data: complaint, error } = await supabase
@@ -626,7 +626,7 @@ router.get('/complaints/:complaintId/details', async (req, res) => {
       workflow_template: 'standard_civic_complaint'
     };
 
-    console.log('✅ Complaint details with REAL workflow loaded successfully');
+    console.log(' Complaint details with REAL workflow loaded successfully');
 
     res.json({
       success: true,
@@ -652,7 +652,7 @@ router.put('/complaints/:complaintId/stage/:stageId', async (req, res) => {
     // Frontend sends stage_status, so use that if status is not provided
     const actualStatus = status || stage_status;
 
-    console.log('🔄 Updating REAL workflow stage:', { 
+    console.log(' Updating REAL workflow stage:', { 
       complaintId, 
       stageId, 
       status: actualStatus,
@@ -794,7 +794,7 @@ router.put('/complaints/:complaintId/stage/:stageId', async (req, res) => {
       console.warn('Failed to log update:', logError.message);
     }
 
-    console.log('✅ REAL workflow stage updated successfully');
+    console.log(' REAL workflow stage updated successfully');
 
     res.json({
       success: true,
@@ -828,7 +828,7 @@ router.post('/complaints/:complaintId/stage/next', async (req, res) => {
     const { complaintId } = req.params;
     const supabase = req.app.get('supabase');
 
-    console.log('➕ Adding next stage to complaint:', complaintId);
+    console.log(' Adding next stage to complaint:', complaintId);
 
     // For now, just move the complaint to the next status
     const { data: complaint, error: fetchError } = await supabase
@@ -883,7 +883,7 @@ router.post('/complaints/:complaintId/stage/next', async (req, res) => {
         });
       }
 
-      console.log('✅ Stage progressed successfully');
+      console.log(' Stage progressed successfully');
 
       res.json({
         success: true,
@@ -914,7 +914,7 @@ router.put('/complaints/:complaintId/status', async (req, res) => {
     const { status } = req.body;
     const supabase = req.app.get('supabase');
 
-    console.log('🔄 Updating complaint status:', { complaintId, status });
+    console.log(' Updating complaint status:', { complaintId, status });
 
     // Update complaint status
     const { data: updatedComplaint, error } = await supabase
@@ -1009,3 +1009,4 @@ router.get('/contractors', (req, res) => {
 });
 
 module.exports = router;
+

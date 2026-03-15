@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 
 /**
@@ -10,7 +10,7 @@ router.put('/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status, notes, adminId } = req.body;
     
-    console.log(`🔄 Admin updating complaint ${id} status to: ${status}`);
+    console.log(` Admin updating complaint ${id} status to: ${status}`);
     
     // Validate input
     if (!id || !status) {
@@ -51,7 +51,7 @@ router.put('/:id/status', async (req, res) => {
       .select();
     
     if (error) {
-      console.error('❌ Error updating complaint status:', error);
+      console.error(' Error updating complaint status:', error);
       return res.status(500).json({
         success: false,
         error: 'Failed to update complaint status',
@@ -66,7 +66,7 @@ router.put('/:id/status', async (req, res) => {
       });
     }
     
-    console.log(`✅ Complaint ${id} status updated to ${status}`);
+    console.log(` Complaint ${id} status updated to ${status}`);
     
     // Return updated complaint
     res.json({
@@ -76,7 +76,7 @@ router.put('/:id/status', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Admin update complaint error:', error);
+    console.error(' Admin update complaint error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to update complaint status',
@@ -91,7 +91,7 @@ router.put('/:id/status', async (req, res) => {
  */
 router.get('/', async (req, res) => {
   try {
-    console.log('📋 Admin fetching all complaints');
+    console.log(' Admin fetching all complaints');
     
     // Query parameters for filtering
     const { status, priority, category, days } = req.query;
@@ -136,7 +136,7 @@ router.get('/', async (req, res) => {
     const { data, error } = await query;
     
     if (error) {
-      console.error('❌ Error fetching complaints:', error);
+      console.error(' Error fetching complaints:', error);
       return res.status(500).json({
         success: false,
         error: 'Failed to fetch complaints',
@@ -144,7 +144,7 @@ router.get('/', async (req, res) => {
       });
     }
     
-    console.log(`✅ Fetched ${data?.length || 0} complaints for admin dashboard`);
+    console.log(` Fetched ${data?.length || 0} complaints for admin dashboard`);
     
     // Calculate statistics
     const statistics = calculateComplaintStatistics(data || []);
@@ -157,7 +157,7 @@ router.get('/', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Admin fetch complaints error:', error);
+    console.error(' Admin fetch complaints error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch complaints',
@@ -232,7 +232,7 @@ function calculateComplaintStatistics(complaints) {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`📋 Admin fetching complaint details for ID: ${id}`);
+    console.log(` Admin fetching complaint details for ID: ${id}`);
     
     const supabase = req.app.get('supabase');
     const { data, error } = await supabase
@@ -242,7 +242,7 @@ router.get('/:id', async (req, res) => {
       .single();
     
     if (error) {
-      console.error('❌ Error fetching complaint details:', error);
+      console.error(' Error fetching complaint details:', error);
       return res.status(500).json({
         success: false,
         error: 'Failed to fetch complaint details',
@@ -257,7 +257,7 @@ router.get('/:id', async (req, res) => {
       });
     }
     
-    console.log(`✅ Fetched details for complaint ${id}`);
+    console.log(` Fetched details for complaint ${id}`);
     
     res.json({
       success: true,
@@ -265,7 +265,7 @@ router.get('/:id', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Admin fetch complaint details error:', error);
+    console.error(' Admin fetch complaint details error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch complaint details',
@@ -275,3 +275,4 @@ router.get('/:id', async (req, res) => {
 });
 
 module.exports = router;
+

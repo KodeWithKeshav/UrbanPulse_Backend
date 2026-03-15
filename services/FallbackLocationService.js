@@ -1,4 +1,4 @@
-const axios = require('axios');
+﻿const axios = require('axios');
 
 /**
  * Fallback Location Service using OpenStreetMap/Nominatim
@@ -15,7 +15,7 @@ class FallbackLocationService {
    */
   async calculateLocationPriority(latitude, longitude, complaintType = 'general') {
     try {
-      console.log(`🔍 Analyzing location priority (Fallback OSM): ${latitude}, ${longitude}`);
+      console.log(` Analyzing location priority (Fallback OSM): ${latitude}, ${longitude}`);
       
       // Get nearby amenities using Overpass API
       const facilities = await this.getNearbyFacilities(latitude, longitude);
@@ -37,7 +37,7 @@ class FallbackLocationService {
       };
       
     } catch (error) {
-      console.error('❌ Fallback location service failed:', error);
+      console.error(' Fallback location service failed:', error);
       return {
         priorityScore: 0.5,
         priorityLevel: 'MEDIUM',
@@ -151,14 +151,14 @@ class FallbackLocationService {
    */
   calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000; // Earth's radius in meters
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
+    const 1 = lat1 * Math.PI / 180;
+    const 2 = lat2 * Math.PI / 180;
+    const  = (lat2 - lat1) * Math.PI / 180;
+    const  = (lon2 - lon1) * Math.PI / 180;
 
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const a = Math.sin(/2) * Math.sin(/2) +
+              Math.cos(1) * Math.cos(2) *
+              Math.sin(/2) * Math.sin(/2);
     
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     
@@ -181,7 +181,7 @@ class FallbackLocationService {
 async function testFallbackService() {
   const fallbackService = new FallbackLocationService();
   
-  console.log('🧪 Testing Fallback Location Service (OpenStreetMap)');
+  console.log(' Testing Fallback Location Service (OpenStreetMap)');
   console.log('=' .repeat(60));
   
   const testLocations = [
@@ -190,19 +190,19 @@ async function testFallbackService() {
   ];
 
   for (const location of testLocations) {
-    console.log(`\n📍 Testing: ${location.name}`);
+    console.log(`\n Testing: ${location.name}`);
     console.log(`Coordinates: ${location.lat}, ${location.lng}`);
     console.log('-'.repeat(40));
     
     try {
       const result = await fallbackService.calculateLocationPriority(location.lat, location.lng);
       
-      console.log(`🎯 Priority Score: ${result.priorityScore}/1.0 (${result.priorityLevel})`);
-      console.log(`🏢 Facilities Found: ${result.facilitiesFound}`);
-      console.log(`🌐 Data Source: ${result.source}`);
+      console.log(` Priority Score: ${result.priorityScore}/1.0 (${result.priorityLevel})`);
+      console.log(` Facilities Found: ${result.facilitiesFound}`);
+      console.log(` Data Source: ${result.source}`);
       
       if (result.facilityBreakdown) {
-        console.log('\n📊 Facility Breakdown:');
+        console.log('\n Facility Breakdown:');
         Object.entries(result.facilityBreakdown).forEach(([type, data]) => {
           console.log(`  ${type}: ${data.count} facilities (nearest: ${data.distance}m)`);
         });
@@ -212,7 +212,7 @@ async function testFallbackService() {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
     } catch (error) {
-      console.error(`❌ Error testing ${location.name}:`, error.message);
+      console.error(` Error testing ${location.name}:`, error.message);
     }
   }
 }
@@ -223,3 +223,4 @@ module.exports = FallbackLocationService;
 if (require.main === module) {
   testFallbackService().catch(console.error);
 }
+

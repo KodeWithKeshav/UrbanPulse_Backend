@@ -1,18 +1,18 @@
-const axios = require('axios');
+﻿const axios = require('axios');
 const fs = require('fs');
 const sharp = require('sharp');
 
-console.log('ðŸ“¦ ImageAnalysisService module loaded');
+console.log(' ImageAnalysisService module loaded');
 
 class ImageAnalysisService {
     constructor() {
-        console.log('ðŸ—ï¸ ImageAnalysisService constructor called');
+        console.log(' ImageAnalysisService constructor called');
         this.apiKey = process.env.ROBOFLOW_API_KEY;
         this.workspaceName = process.env.ROBOFLOW_WORKSPACE;
         this.workflowId = process.env.ROBOFLOW_WORKFLOW;
         this.apiUrl = process.env.ROBOFLOW_API_URL || 'https://serverless.roboflow.com';
         
-        console.log('ðŸ”§ ImageAnalysisService initialized with:');
+        console.log(' ImageAnalysisService initialized with:');
         console.log(`   API Key: ${this.apiKey ? 'Set' : 'Missing'}`);
         console.log(`   Workspace: ${this.workspaceName || 'Missing'}`);
         console.log(`   Workflow: ${this.workflowId || 'Missing'}`);
@@ -55,7 +55,7 @@ class ImageAnalysisService {
             const threshold = 0.7;
 
             if (raw && Array.isArray(raw.outputs)) {
-                console.log('ðŸ” Roboflow workflow outputs:', JSON.stringify(raw.outputs, null, 2));
+                console.log(' Roboflow workflow outputs:', JSON.stringify(raw.outputs, null, 2));
                 for (const outputObj of raw.outputs) {
                     const output2 = outputObj.output2;
                     const outputText = outputObj.output;
@@ -90,11 +90,11 @@ class ImageAnalysisService {
                     }
 
                     // Log both model and OpenAI results for debugging
-                    console.log('ðŸ§  Model result:', {
+                    console.log(' Model result:', {
                         prediction: modelPrediction,
                         confidence: modelConfidence
                     });
-                    console.log('ðŸ¤– OpenAI result:', {
+                    console.log(' OpenAI result:', {
                         prediction: openaiPrediction,
                         confidence: openaiConfidence,
                         outputText
@@ -142,7 +142,7 @@ class ImageAnalysisService {
 
     async validateAndAnalyzeImage(imagePath) {
         try {
-            console.log('ðŸ” Starting image validation and analysis...');
+            console.log(' Starting image validation and analysis...');
             
             if (!fs.existsSync(imagePath)) {
                 throw new Error('Image file not found');
@@ -189,7 +189,7 @@ class ImageAnalysisService {
             };
 
         } catch (error) {
-            console.error('âŒ Image validation/analysis failed:', error);
+            console.error(' Image validation/analysis failed:', error);
             return {
                 success: false,
                 error: error.message,
@@ -203,7 +203,7 @@ class ImageAnalysisService {
             const imageBuffer = fs.readFileSync(imagePath);
             const metadata = await sharp(imageBuffer).metadata();
             
-            console.log('ðŸ“Š Image metadata:', {
+            console.log(' Image metadata:', {
                 format: metadata.format,
                 width: metadata.width,
                 height: metadata.height,
@@ -242,7 +242,7 @@ class ImageAnalysisService {
             return validation;
 
         } catch (error) {
-            console.error('âŒ Image quality validation failed:', error);
+            console.error(' Image quality validation failed:', error);
             return {
                 isValid: false,
                 error: 'Unable to process image file',
@@ -271,7 +271,7 @@ class ImageAnalysisService {
             }
             variance = variance / data.length;
 
-            console.log('ðŸ“ˆ Image content analysis:', {
+            console.log(' Image content analysis:', {
                 avgIntensity: average.toFixed(2),
                 variance: variance.toFixed(2)
             });
@@ -286,7 +286,7 @@ class ImageAnalysisService {
             };
 
         } catch (error) {
-            console.error('âŒ Blank detection failed:', error);
+            console.error(' Blank detection failed:', error);
             return { isBlank: false, error: error.message };
         }
     }
@@ -295,19 +295,19 @@ class ImageAnalysisService {
         const QUICK_DEV_MODE = process.env.QUICK_DEV_MODE === 'true';
         
         if (QUICK_DEV_MODE) {
-            console.log('âš¡ Quick development mode enabled - using fallback analysis');
+            console.log(' Quick development mode enabled - using fallback analysis');
             return this.getFallbackAnalysis();
         }
         
         try {
-            console.log('ðŸ”¬ Starting Roboflow workflow analysis...');
-            console.log(`ðŸ“‹ Using InferenceHTTPClient approach:`);
+            console.log(' Starting Roboflow workflow analysis...');
+            console.log(` Using InferenceHTTPClient approach:`);
             console.log(`   Workspace: ${this.workspaceName}`);
             console.log(`   Workflow: ${this.workflowId}`);
             console.log(`   API URL: ${this.apiUrl}`);
 
             if (!this.apiKey || !this.workspaceName || !this.workflowId) {
-                console.log('âš ï¸ Roboflow credentials missing - using fallback analysis');
+                console.log(' Roboflow credentials missing - using fallback analysis');
                 console.log(`   API Key: ${this.apiKey ? 'SET' : 'MISSING'}`);
                 console.log(`   Workspace: ${this.workspaceName || 'MISSING'}`);
                 console.log(`   Workflow: ${this.workflowId || 'MISSING'}`);
@@ -335,7 +335,7 @@ class ImageAnalysisService {
             
             for (let i = 0; i < possibleUrls.length; i++) {
                 const workflowUrl = possibleUrls[i];
-                console.log(`ðŸš€ Trying endpoint ${i + 1}/${possibleUrls.length}: ${workflowUrl}`);
+                console.log(` Trying endpoint ${i + 1}/${possibleUrls.length}: ${workflowUrl}`);
                 
                 try {
                     const attemptResponse = await axios.post(workflowUrl, form, {
@@ -349,13 +349,13 @@ class ImageAnalysisService {
                         maxBodyLength: Infinity
                     });
                     
-                    console.log(`âœ… Endpoint ${i + 1} succeeded!`);
+                    console.log(` Endpoint ${i + 1} succeeded!`);
                     response = attemptResponse;
                     successfulUrl = workflowUrl;
                     break;
                     
                 } catch (urlError) {
-                    console.log(`âŒ Endpoint ${i + 1} failed:`, {
+                    console.log(` Endpoint ${i + 1} failed:`, {
                         status: urlError.response?.status,
                         statusText: urlError.response?.statusText,
                         error: urlError.response?.data?.detail || urlError.message
@@ -371,32 +371,32 @@ class ImageAnalysisService {
                 throw new Error('All endpoint formats failed');
             }
             
-            console.log(`ðŸŽ¯ Successful endpoint: ${successfulUrl}`);
-            console.log(`ðŸ” Response status: ${response.status}`);
-            console.log(`ðŸ” Response data:`, JSON.stringify(response.data, null, 2));
+            console.log(` Successful endpoint: ${successfulUrl}`);
+            console.log(` Response status: ${response.status}`);
+            console.log(` Response data:`, JSON.stringify(response.data, null, 2));
 
-            console.log('âœ… Roboflow workflow response received');
-            console.log(`ðŸ“Š Response status: ${response.status}`);
-            console.log('ðŸ“„ Response data keys:', Object.keys(response.data || {}));
+            console.log(' Roboflow workflow response received');
+            console.log(` Response status: ${response.status}`);
+            console.log(' Response data keys:', Object.keys(response.data || {}));
             
             return this.processWorkflowResponse(response.data);
 
         } catch (error) {
-            console.error('âŒ Roboflow workflow analysis failed:', error.message);
+            console.error(' Roboflow workflow analysis failed:', error.message);
             
             if (error.response) {
-                console.error(`ðŸ” Response status: ${error.response.status}`);
-                console.error('ðŸ” Response data:', error.response.data);
+                console.error(` Response status: ${error.response.status}`);
+                console.error(' Response data:', error.response.data);
                 this.handleWorkflowError(error.response.status, error.response.data);
             } else if (error.code === 'ECONNABORTED') {
-                console.error('â±ï¸ Request timeout - API took too long to respond');
+                console.error(' Request timeout - API took too long to respond');
             } else if (error.code === 'ENOTFOUND') {
-                console.error('ðŸŒ Network error - Cannot reach Roboflow servers');
+                console.error(' Network error - Cannot reach Roboflow servers');
             } else {
-                console.error('âŒ Request setup error:', error.message);
+                console.error(' Request setup error:', error.message);
             }
             
-            console.log('ðŸ”„ Falling back to development analysis mode');
+            console.log(' Falling back to development analysis mode');
             return this.getFallbackAnalysis();
         }
     }
@@ -404,61 +404,61 @@ class ImageAnalysisService {
     handleWorkflowError(status, data) {
         switch (status) {
             case 401:
-                console.log('ðŸ”‘ Authentication Error:');
+                console.log(' Authentication Error:');
                 console.log('   - API key may be invalid or expired');
                 console.log('   - Check API key permissions in Roboflow dashboard');
                 break;
             case 403:
-                console.log('ðŸš« Access Forbidden:');
+                console.log(' Access Forbidden:');
                 console.log('   - API key lacks permission for this workspace/workflow');
                 console.log('   - Verify workspace and workflow access rights');
                 break;
             case 404:
-                console.log('ðŸ” Not Found:');
+                console.log(' Not Found:');
                 console.log('   - Workflow may not exist or be published');
                 console.log('   - Check workspace name and workflow ID');
                 break;
             case 422:
-                console.log('ðŸ“ Validation Error:');
+                console.log(' Validation Error:');
                 console.log('   - Image format or size may be invalid');
                 console.log('   - Check image requirements for the workflow');
                 break;
             case 502:
-                console.log('ðŸ”§ Workflow Configuration Issue:');
+                console.log(' Workflow Configuration Issue:');
                 console.log('   - Workflow may need inference server setup');
                 console.log('   - Check Roboflow dashboard for workflow status');
                 console.log('   - Ensure all workflow blocks are properly configured');
                 break;
             case 503:
-                console.log('â³ Service Temporarily Unavailable:');
+                console.log(' Service Temporarily Unavailable:');
                 console.log('   - Roboflow servers may be busy');
                 console.log('   - Try again in a few minutes');
                 break;
             default:
-                console.log(`â“ Unexpected Error (${status}):`, data);
+                console.log(` Unexpected Error (${status}):`, data);
         }
     }
 
     processWorkflowResponse(responseData) {
         try {
-            console.log('ðŸ“„ Processing workflow response...');
+            console.log(' Processing workflow response...');
             
             if (!responseData) {
-                console.log('âš ï¸ Empty response data');
+                console.log(' Empty response data');
                 return this.getFallbackAnalysis();
             }
 
-            console.log('ðŸ” Full response structure:', JSON.stringify(responseData, null, 2));
+            console.log(' Full response structure:', JSON.stringify(responseData, null, 2));
 
             let predictions = [];
             let hasIssues = false;
 
             if (responseData.predictions && Array.isArray(responseData.predictions)) {
-                console.log(`ðŸ“Š Found ${responseData.predictions.length} predictions`);
+                console.log(` Found ${responseData.predictions.length} predictions`);
                 predictions = responseData.predictions.map(pred => this.formatPrediction(pred));
                 hasIssues = predictions.length > 0;
             } else if (responseData.outputs) {
-                console.log('ðŸ“Š Processing workflow outputs...');
+                console.log(' Processing workflow outputs...');
                 for (const [outputKey, outputValue] of Object.entries(responseData.outputs)) {
                     console.log(`   Processing output: ${outputKey}`);
                     
@@ -469,14 +469,14 @@ class ImageAnalysisService {
                     }
                 }
             } else if (responseData.result) {
-                console.log('ðŸ“Š Processing result data...');
+                console.log(' Processing result data...');
                 if (responseData.result.predictions) {
                     predictions = responseData.result.predictions.map(pred => this.formatPrediction(pred));
                     hasIssues = predictions.length > 0;
                 }
             }
 
-            console.log(`âœ… Processed ${predictions.length} total predictions`);
+            console.log(` Processed ${predictions.length} total predictions`);
 
             const result = {
                 hasIssues,
@@ -490,7 +490,7 @@ class ImageAnalysisService {
                 }
             };
 
-            console.log('ðŸŽ¯ Analysis result summary:', {
+            console.log(' Analysis result summary:', {
                 hasIssues: result.hasIssues,
                 predictionCount: result.predictions.length,
                 priorityScore: result.priorityScore
@@ -499,7 +499,7 @@ class ImageAnalysisService {
             return result;
 
         } catch (error) {
-            console.error('âŒ Error processing workflow response:', error);
+            console.error(' Error processing workflow response:', error);
             return this.getFallbackAnalysis();
         }
     }
@@ -579,7 +579,7 @@ class ImageAnalysisService {
     }
 
     getFallbackAnalysis() {
-        console.log('ðŸ”„ Using fallback analysis for development');
+        console.log(' Using fallback analysis for development');
         
         return {
             success: true,
@@ -624,3 +624,4 @@ class ImageAnalysisService {
 
 module.exports = ImageAnalysisService;
 module.exports.validateImageWithRoboflow = ImageAnalysisService.validateImageWithRoboflow;
+

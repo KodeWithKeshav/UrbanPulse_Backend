@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -27,7 +27,7 @@ const upload = multer({
         fileSize: 10 * 1024 * 1024 // 10MB limit
     },
     fileFilter: (req, file, cb) => {
-        console.log('🔍 File filter check:', {
+        console.log(' File filter check:', {
             originalname: file.originalname,
             mimetype: file.mimetype,
             size: file.size
@@ -43,7 +43,7 @@ const upload = multer({
         const isWebpFile = file.originalname.toLowerCase().endsWith('.webp');
         const isWebpOctetStream = file.mimetype === 'application/octet-stream' && isWebpFile;
 
-        console.log('🔍 Validation results:', {
+        console.log(' Validation results:', {
             hasValidExtension: hasValidExtension,
             hasValidMime: hasValidMime,
             isWebpFile: isWebpFile,
@@ -53,13 +53,13 @@ const upload = multer({
         });
 
         if (hasValidMime && hasValidExtension) {
-            console.log('✅ File accepted (standard image type)');
+            console.log(' File accepted (standard image type)');
             return cb(null, true);
         } else if (isWebpOctetStream) {
-            console.log('✅ File accepted (WebP with octet-stream mime)');
+            console.log(' File accepted (WebP with octet-stream mime)');
             return cb(null, true);
         } else {
-            console.log('❌ File rejected');
+            console.log(' File rejected');
             cb(new Error(`Only image files (JPEG, PNG, WebP) are allowed. Got: ${file.mimetype}`));
         }
     }
@@ -107,7 +107,7 @@ router.get('/categories', (req, res) => {
 // Route to test Roboflow connection
 router.get('/test-connection', async (req, res) => {
     try {
-        console.log('🔧 Testing Roboflow connection...');
+        console.log(' Testing Roboflow connection...');
         
         const config = {
             apiKey: process.env.ROBOFLOW_API_KEY ? 'Present' : 'Missing',
@@ -185,3 +185,4 @@ router.post('/validate-image', async (req, res) => {
 });
 
 module.exports = router;
+

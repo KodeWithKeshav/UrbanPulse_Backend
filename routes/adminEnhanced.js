@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 
 // ============================================================================
@@ -8,7 +8,7 @@ const router = express.Router();
 // Get comprehensive dashboard overview
 router.get('/dashboard/overview', async (req, res) => {
   try {
-    console.log('📊 Loading comprehensive admin dashboard...');
+    console.log(' Loading comprehensive admin dashboard...');
     const supabase = req.app.get('supabase');
     
     // Get complaint statistics with stages
@@ -589,3 +589,4 @@ async function updateComplaintProgress(supabase, complaintId) {
 }
 
 module.exports = router;
+

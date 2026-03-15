@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Get the server configuration for cloud deployment
  * @returns {object} Server configuration with host and port
  */

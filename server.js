@@ -1,4 +1,4 @@
-// Load environment variables from the project .env (no hardcoded absolute paths)
+﻿// Load environment variables from the project .env (no hardcoded absolute paths)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -8,7 +8,7 @@ const { supabase } = require('./config/supabase');
 const { getServerConfig } = require('./utils/networkUtils');
 
 // Debug environment variables
-console.log('ðŸ”§ Environment Debug:', {
+console.log(' Environment Debug:', {
     ROBOFLOW_API_KEY: process.env.ROBOFLOW_API_KEY ? 'SET' : 'NOT SET',
     ROBOFLOW_WORKSPACE: process.env.ROBOFLOW_WORKSPACE || 'NOT SET',
     ROBOFLOW_WORKFLOW: process.env.ROBOFLOW_WORKFLOW || 'NOT SET',
@@ -24,7 +24,7 @@ if (!process.env.JWT_SECRET) {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('JWT_SECRET environment variable is required in production');
   } else {
-    console.warn('âš ï¸  Using default JWT secret for development. Set JWT_SECRET in production!');
+    console.warn('  Using default JWT secret for development. Set JWT_SECRET in production!');
     process.env.JWT_SECRET = 'dev-secret-change-me';
   }
 }
@@ -37,7 +37,7 @@ const { host, port, url } = serverConfig;
 app.set('supabase', supabase);
 
 // Log connection status
-console.log('ðŸ”Œ Supabase client initialized');
+console.log(' Supabase client initialized');
 
 // Middleware
 app.use(helmet());
@@ -96,7 +96,7 @@ app.use((req, res, next) => {
       logInfo.body = bodyStr.length > 200 ? bodyStr.substring(0, 200) + '...' : bodyStr;
     }
     
-    console.log('ðŸ“¥ API REQUEST:', JSON.stringify(logInfo));
+    console.log(' API REQUEST:', JSON.stringify(logInfo));
   }
   next();
 });
@@ -171,12 +171,13 @@ app.use((req, res) => {
 });
 
 app.listen(port, '0.0.0.0', () => {
-  console.log(`ðŸš€ UrbanPulse Backend Server is running on ${url}`);
-  console.log(`ðŸ“Š Health check: ${url}/health`);
-  console.log(`ðŸ“± API endpoints: ${url}/api`);
-  console.log(`ðŸŒ Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log('â­ Server is ready to accept connections');
+  console.log(` UrbanPulse Backend Server is running on ${url}`);
+  console.log(` Health check: ${url}/health`);
+  console.log(` API endpoints: ${url}/api`);
+  console.log(` Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(' Server is ready to accept connections');
 });
 
 module.exports = app;
+
 

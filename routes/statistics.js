@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 
@@ -8,7 +8,7 @@ const { supabase } = require('../config/supabase');
  */
 router.get('/debug', async (req, res) => {
   try {
-    console.log('🔍 Debug statistics request');
+    console.log(' Debug statistics request');
     
     const { data, error } = await supabase
       .from('complaints')
@@ -36,7 +36,7 @@ router.get('/debug', async (req, res) => {
       });
     });
     
-    console.log('📊 Status breakdown:', statusCounts);
+    console.log(' Status breakdown:', statusCounts);
     
     res.json({
       success: true,
@@ -64,7 +64,7 @@ router.get('/debug', async (req, res) => {
  */
 router.get('/summary', async (req, res) => {
   try {
-    console.log('📊 Getting statistics summary');
+    console.log(' Getting statistics summary');
     
     const { data, error } = await supabase
       .from('complaints')
@@ -96,3 +96,4 @@ router.get('/summary', async (req, res) => {
 });
 
 module.exports = router;
+

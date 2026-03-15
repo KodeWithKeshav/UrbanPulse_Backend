@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
@@ -23,10 +23,10 @@ class EmotionAnalysisService {
     // Enhanced multilingual keywords
     this.emotionKeywords = {
       hi: { // Hindi
-        anger: ['à¤—à¥à¤¸à¥à¤¸à¤¾', 'à¤•à¥à¤°à¥‹à¤§', 'à¤¨à¤¾à¤°à¤¾à¤œà¤¼', 'à¤ªà¤°à¥‡à¤¶à¤¾à¤¨', 'à¤šà¤¿à¤¢à¤¼', 'à¤–à¤«à¤¾'],
-        urgency: ['à¤¤à¥à¤°à¤‚à¤¤', 'à¤œà¤²à¥à¤¦à¥€', 'à¤†à¤ªà¤¾à¤¤à¤•à¤¾à¤²', 'à¤–à¤¤à¤°à¤¨à¤¾à¤•', 'à¤…à¤­à¥€', 'à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾', 'à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾à¤à¤‚', 'à¤®à¥Œà¤¤', 'à¤®à¥Œà¤¤à¥‡à¤‚', 'à¤®à¥ƒà¤¤à¥à¤¯à¥'],
-        frustration: ['à¤ªà¤°à¥‡à¤¶à¤¾à¤¨', 'à¤¤à¤‚à¤—', 'à¤¦à¥à¤–à¥€', 'à¤šà¤¿à¤‚à¤¤à¤¿à¤¤', 'à¤¹à¥ˆà¤°à¤¾à¤¨', 'à¤¨à¤¿à¤°à¤¾à¤¶'],
-        concern: ['à¤šà¤¿à¤‚à¤¤à¤¾', 'à¤¡à¤°', 'à¤«à¤¿à¤•à¥à¤°', 'à¤˜à¤¬à¤°à¤¾à¤¹à¤Ÿ', 'à¤¬à¥‡à¤šà¥ˆà¤¨à¥€', 'à¤šà¤¿à¤‚à¤¤à¤¿à¤¤']
+        anger: ['', '', '', '', '', ''],
+        urgency: ['', '', '', '', '', '', '', '', '', ''],
+        frustration: ['', '', '', '', '', ''],
+        concern: ['', '', '', '', '', '']
       },
       en: { // English
         anger: ['angry', 'furious', 'mad', 'irritated', 'annoyed', 'frustrated'],
@@ -35,10 +35,10 @@ class EmotionAnalysisService {
         concern: ['worried', 'concerned', 'scared', 'afraid', 'anxious']
       },
       ta: { // Tamil - Comprehensive keywords
-        anger: ['à®•à¯‹à®ªà®®à¯', 'à®Žà®°à®¿à®šà¯à®šà®²à¯', 'à®šà¯€à®±à¯à®±à®®à¯', 'à®µà¯†à®±à¯à®ªà¯à®ªà¯', 'à®•à¯‹à®ªà®®à®¾à®•', 'à®Žà®°à®¿à®šà¯à®šà®²à®¾à®•', 'à®•à¯‹à®ªà®ªà¯à®ªà®Ÿà¯à®•à®¿à®±à¯‡à®©à¯', 'à®µà¯†à®±à¯à®•à¯à®•à®¿à®±à¯‡à®©à¯'],
-        urgency: ['à®…à®µà®šà®°à®®à¯', 'à®‰à®Ÿà®©à®Ÿà®¿', 'à®†à®ªà®¤à¯à®¤à¯', 'à®®à¯à®•à¯à®•à®¿à®¯à®®à¯', 'à®…à®µà®šà®°à®®à®¾à®•', 'à®‰à®Ÿà®©à®Ÿà®¿à®¯à®¾à®•', 'à®†à®ªà®¤à¯à®¤à®¾à®©', 'à®…à®µà®šà®°', 'à®®à®°à®£à®®à¯', 'à®µà®¿à®ªà®¤à¯à®¤à¯', 'à®‰à®¯à®¿à®°à¯à®•à¯à®•à¯ à®†à®ªà®¤à¯à®¤à¯', 'à®ªà¯†à®°à®¿à®¯', 'à®®à®¿à®•à®ªà¯à®ªà¯†à®°à®¿à®¯', 'à®ªà®¿à®°à®šà¯à®šà®©à¯ˆ'],
-        frustration: ['à®µà®°à¯à®¤à¯à®¤à®®à¯', 'à®à®®à®¾à®±à¯à®±à®®à¯', 'à®µà®°à¯à®¤à¯à®¤à®®à®¾à®•', 'à®à®®à®¾à®±à¯à®±à®®à®¾à®•', 'à®•à®·à¯à®Ÿà®®à¯', 'à®¤à¯à®©à¯à®ªà®®à¯', 'à®µà¯‡à®¤à®©à¯ˆ', 'à®šà¯‹à®•à®®à¯'],
-        concern: ['à®•à®µà®²à¯ˆ', 'à®ªà®¯à®®à¯', 'à®•à®µà®²à¯ˆà®¯à®¾à®•', 'à®ªà®¯à®®à®¾à®•', 'à®µà¯‡à®µà®²à¯ˆ', 'à®šà®¿à®¨à¯à®¤à®©à¯ˆ', 'à®ªà®°à®¿à®µà¯', 'à®•à®µà®©à®®à¯', 'à®‰à®³à¯ˆà®šà¯à®šà®²à¯', 'à®¨à¯†à®°à¯à®•à¯à®•à®Ÿà®¿', 'à®¤à¯‡à®µà¯ˆ', 'à®šà®¿à®•à¯à®•à®²à¯']
+        anger: ['', '', '', '', '', '', '', ''],
+        urgency: ['', '', '', '', '', '', '', '', '', '', ' ', '', '', ''],
+        frustration: ['', '', '', '', '', '', '', ''],
+        concern: ['', '', '', '', '', '', '', '', '', '', '', '']
       }
     };
   }
@@ -62,12 +62,12 @@ class EmotionAnalysisService {
       throw new Error('No Hugging Face API token');
     }
 
-    console.log('ðŸ¤– Starting AI analysis for text:', text.substring(0, 50));
+    console.log(' Starting AI analysis for text:', text.substring(0, 50));
     
     // Try each model until one works
     for (let i = 0; i < this.config.models.length; i++) {
       const modelUrl = this.config.models[i];
-      console.log(`ðŸ”„ Trying model ${i + 1}/${this.config.models.length}: ${modelUrl.split('/').pop()}`);
+      console.log(` Trying model ${i + 1}/${this.config.models.length}: ${modelUrl.split('/').pop()}`);
       
       try {
         const response = await axios.post(
@@ -82,11 +82,11 @@ class EmotionAnalysisService {
           }
         );
         
-        console.log('âœ… AI Model succeeded! Response:', response.data);
+        console.log(' AI Model succeeded! Response:', response.data);
         return this.convertSentimentToEmotions(response.data, text);
         
       } catch (error) {
-        console.log(`âŒ Model ${i + 1} failed:`, error.response?.status || error.message);
+        console.log(` Model ${i + 1} failed:`, error.response?.status || error.message);
         
         // If this is the last model, throw the error
         if (i === this.config.models.length - 1) {
@@ -103,7 +103,7 @@ class EmotionAnalysisService {
    * Convert sentiment analysis to civic emotion format
    */
   convertSentimentToEmotions(sentimentData, text) {
-    console.log('ðŸ”„ Converting sentiment data:', sentimentData);
+    console.log(' Converting sentiment data:', sentimentData);
     
     const emotions = { anger: 0, urgency: 0, frustration: 0, concern: 0 };
     
@@ -128,7 +128,7 @@ class EmotionAnalysisService {
       const label = sentiment.label.toLowerCase();
       const score = sentiment.score;
       
-      console.log(`ðŸ“Š AI Sentiment: ${label} (${score.toFixed(3)})`);
+      console.log(` AI Sentiment: ${label} (${score.toFixed(3)})`);
       
       // Map sentiment to civic emotions
       if (label.includes('negative') || label === '1 star' || label === '2 stars') {
@@ -152,7 +152,7 @@ class EmotionAnalysisService {
         // Set baseline concerns for civic complaints in these languages
         const language = this.detectLanguage(text);
         if (language === 'ta' || language === 'hi') {
-          console.log(`ðŸ”§ Adjusting positive sentiment for ${language} civic complaint`);
+          console.log(` Adjusting positive sentiment for ${language} civic complaint`);
           emotions.concern = Math.max(0.3, urgencyBoost); // Minimum 30% concern
           emotions.urgency = Math.max(0.2, urgencyBoost); // Minimum 20% urgency
           
@@ -169,14 +169,14 @@ class EmotionAnalysisService {
         emotions.concern = urgencyBoost * 0.5;
       }
     } else {
-      console.log('âš ï¸ Unknown sentiment format, using text analysis only');
+      console.log(' Unknown sentiment format, using text analysis only');
       // Fallback to pure text analysis
       const urgencyBoost = this.detectUrgencyFromText(text);
       emotions.urgency = urgencyBoost;
       emotions.concern = urgencyBoost * 0.8;
     }
     
-    console.log('âœ… Final AI emotions:', emotions);
+    console.log(' Final AI emotions:', emotions);
     return emotions;
   }
 
@@ -192,18 +192,18 @@ class EmotionAnalysisService {
       'stench', 'smell', 'dirty', 'filthy', 'overflow', 'leakage', 'burst',
       
       // Hindi - Health & Sanitation
-      'à¤®à¥Œà¤¤', 'à¤®à¥Œà¤¤à¥‡à¤‚', 'à¤®à¥ƒà¤¤à¥à¤¯à¥', 'à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾', 'à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾à¤à¤‚', 'à¤†à¤ªà¤¾à¤¤à¤•à¤¾à¤²', 'à¤–à¤¤à¤°à¤¨à¤¾à¤•', 'à¤—à¤‚à¤­à¥€à¤°',
-      'à¤¬à¥€à¤®à¤¾à¤°à¥€', 'à¤°à¥‹à¤—', 'à¤¸à¥à¤µà¤¾à¤¸à¥à¤¥à¥à¤¯', 'à¤ªà¥à¤°à¤¦à¥‚à¤·à¤£', 'à¤—à¤‚à¤¦à¤—à¥€', 'à¤¬à¤¦à¤¬à¥‚', 'à¤¦à¥à¤°à¥à¤—à¤‚à¤§', 'à¤¸à¤¡à¤¼à¤¨',
-      'à¤˜à¥à¤Ÿà¤¨', 'à¤˜à¥à¤Ÿ à¤°à¤¹à¥‡', 'à¤¸à¥€à¤µà¥‡à¤œ', 'à¤¨à¤¾à¤²à¥€', 'à¤—à¤‚à¤¦à¤¾ à¤ªà¤¾à¤¨à¥€', 'à¤°à¤¿à¤¸à¤¾à¤µ', 'à¤«à¥‚à¤Ÿà¤¨à¤¾', 'à¤¬à¤¹à¤¨à¤¾',
-      'à¤®à¥à¤¶à¥à¤•à¤¿à¤²', 'à¤•à¤ à¤¿à¤¨à¤¾à¤ˆ', 'à¤ªà¤°à¥‡à¤¶à¤¾à¤¨à¥€', 'à¤¦à¤¿à¤•à¥à¤•à¤¤', 'à¤¸à¤®à¤¸à¥à¤¯à¤¾',
+      '', '', '', '', '', '', '', '',
+      '', '', '', '', '', '', '', '',
+      '', ' ', '', '', ' ', '', '', '',
+      '', '', '', '', '',
       
       // SAFETY TERMS
       // Hindi - Safety & Security  
-      'à¤¸à¥à¤°à¤•à¥à¤·à¤¾', 'à¤¸à¥à¤°à¤•à¥à¤·à¤¿à¤¤', 'à¤…à¤¸à¥à¤°à¤•à¥à¤·à¤¿à¤¤', 'à¤–à¤¤à¤°à¤¾', 'à¤¡à¤°', 'à¤šà¤¿à¤‚à¤¤à¤¾',
-      'à¤²à¤¡à¤¼à¤•à¤¿à¤¯à¥‹à¤‚', 'à¤®à¤¹à¤¿à¤²à¤¾à¤“à¤‚', 'à¤¬à¤šà¥à¤šà¥‹à¤‚', 'à¤°à¤¾à¤¤', 'à¤…à¤‚à¤§à¥‡à¤°à¤¾', 'à¤¸à¥à¤¨à¤¿à¤¶à¥à¤šà¤¿à¤¤', 'à¤¨à¤¹à¥€à¤‚',
+      '', '', '', '', '', '',
+      '', '', '', '', '', '', '',
       
       // Tamil
-      'à®®à®°à®£à®®à¯', 'à®µà®¿à®ªà®¤à¯à®¤à¯', 'à®†à®ªà®¤à¯à®¤à¯', 'à®…à®µà®šà®°à®®à¯', 'à®ªà®¾à®¤à¯à®•à®¾à®ªà¯à®ªà¯', 'à®ªà®¯à®®à¯', 'à®•à®µà®²à¯ˆ', 'à®¨à¯‹à®¯à¯', 'à®…à®šà¯à®¤à¯à®¤à®®à¯'
+      '', '', '', '', '', '', '', '', ''
     ];
 
     let urgencyScore = 0;
@@ -218,8 +218,8 @@ class EmotionAnalysisService {
     // Special high-impact health phrases get higher scores
     const criticalHealthPhrases = [
       // Hindi
-      'à¤˜à¥à¤Ÿ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚', 'à¤¬à¤¦à¤¬à¥‚ à¤®à¥‡à¤‚', 'à¤—à¤‚à¤¦à¤—à¥€ à¤®à¥‡à¤‚', 'à¤¸à¥€à¤µà¥‡à¤œ à¤•à¤¾', 'à¤—à¤‚à¤¦à¤¾ à¤ªà¤¾à¤¨à¥€', 'à¤¬à¥€à¤®à¤¾à¤° à¤¹à¥‹ à¤°à¤¹à¥‡', 'à¤¸à¥à¤µà¤¾à¤¸à¥à¤¥à¥à¤¯ à¤–à¤°à¤¾à¤¬',
-      'à¤¸à¤¾à¤‚à¤¸ à¤²à¥‡à¤¨à¥‡ à¤®à¥‡à¤‚ à¤¦à¤¿à¤•à¥à¤•à¤¤', 'à¤ªà¥‡à¤Ÿ à¤•à¥€ à¤¬à¥€à¤®à¤¾à¤°à¥€', 'à¤¡à¥‡à¤‚à¤—à¥‚ à¤•à¤¾ à¤–à¤¤à¤°à¤¾', 'à¤®à¤šà¥à¤›à¤° à¤ªà¥ˆà¤¦à¤¾ à¤¹à¥‹ à¤°à¤¹à¥‡',
+      '  ', ' ', ' ', ' ', ' ', '  ', ' ',
+      '   ', '  ', '  ', '   ',
       
       // English  
       'suffocating in', 'health emergency', 'disease outbreak', 'contaminated water',
@@ -234,7 +234,7 @@ class EmotionAnalysisService {
 
     // Safety phrases (from previous implementation)
     const safetyPhrases = [
-      'à¤¸à¥à¤°à¤•à¥à¤·à¤¾ à¤¸à¥à¤¨à¤¿à¤¶à¥à¤šà¤¿à¤¤ à¤¨à¤¹à¥€à¤‚', 'à¤²à¤¡à¤¼à¤•à¤¿à¤¯à¥‹à¤‚ à¤•à¥€ à¤¸à¥à¤°à¤•à¥à¤·à¤¾', 'à¤°à¤¾à¤¤ à¤•à¥‡ à¤¸à¤®à¤¯', 'à¤šà¤²à¤¨à¤¾ à¤®à¥à¤¶à¥à¤•à¤¿à¤²',
+      '  ', '  ', '  ', ' ',
       'women safety', 'girls safety', 'night time', 'walking difficult'
     ];
     
@@ -257,8 +257,8 @@ class EmotionAnalysisService {
     // High-priority safety phrases
     const criticalSafetyPhrases = [
       // Hindi
-      'à¤¸à¥à¤°à¤•à¥à¤·à¤¾ à¤¸à¥à¤¨à¤¿à¤¶à¥à¤šà¤¿à¤¤ à¤¨à¤¹à¥€à¤‚', 'à¤²à¤¡à¤¼à¤•à¤¿à¤¯à¥‹à¤‚ à¤•à¥€ à¤¸à¥à¤°à¤•à¥à¤·à¤¾', 'à¤®à¤¹à¤¿à¤²à¤¾à¤“à¤‚ à¤•à¥€ à¤¸à¥à¤°à¤•à¥à¤·à¤¾', 
-      'à¤°à¤¾à¤¤ à¤•à¥‡ à¤¸à¤®à¤¯', 'à¤…à¤‚à¤§à¥‡à¤°à¥‡ à¤®à¥‡à¤‚', 'à¤šà¤²à¤¨à¤¾ à¤®à¥à¤¶à¥à¤•à¤¿à¤²', 'à¤¡à¤° à¤²à¤—à¤¤à¤¾ à¤¹à¥ˆ',
+      '  ', '  ', '  ', 
+      '  ', ' ', ' ', '  ',
       // English
       'women safety', 'girls safety', 'ladies safety', 'night time safety',
       'walking difficult', 'afraid to walk', 'security concern', 'safety issue'
@@ -273,7 +273,7 @@ class EmotionAnalysisService {
     
     // Check for vulnerable groups mentions
     const vulnerableGroups = [
-      'à¤²à¤¡à¤¼à¤•à¤¿à¤¯à¥‹à¤‚', 'à¤²à¤¡à¤¼à¤•à¤¿à¤¯à¤¾à¤‚', 'à¤®à¤¹à¤¿à¤²à¤¾à¤“à¤‚', 'à¤¬à¤šà¥à¤šà¥‹à¤‚', 'à¤¬à¥à¤œà¥à¤°à¥à¤—à¥‹à¤‚',
+      '', '', '', '', '',
       'girls', 'women', 'ladies', 'children', 'elderly'
     ];
     
@@ -284,7 +284,7 @@ class EmotionAnalysisService {
     });
     
     // Check for time-based vulnerability (night, dark)
-    const timeVulnerability = ['à¤°à¤¾à¤¤', 'à¤…à¤‚à¤§à¥‡à¤°à¤¾', 'night', 'dark', 'evening'];
+    const timeVulnerability = ['', '', 'night', 'dark', 'evening'];
     timeVulnerability.forEach(time => {
       if (textLower.includes(time)) {
         safetyBoost += 0.03; // 3% boost for time vulnerability (reduced from 10%)
@@ -298,7 +298,7 @@ class EmotionAnalysisService {
    * Keyword-based emotion analysis (fallback)
    */
   analyzeWithKeywords(text, language) {
-    console.log(`ðŸ” Keyword analysis for language: ${language}`);
+    console.log(` Keyword analysis for language: ${language}`);
     const keywords = this.emotionKeywords[language] || this.emotionKeywords.en;
     const emotions = { anger: 0, urgency: 0, frustration: 0, concern: 0 };
     const textLower = text.toLowerCase();
@@ -312,7 +312,7 @@ class EmotionAnalysisService {
         if (textLower.includes(keyword.toLowerCase())) {
           score += 0.25;
           matchCount++;
-          console.log(`âœ… Found ${emotion} keyword: "${keyword}"`);
+          console.log(` Found ${emotion} keyword: "${keyword}"`);
         }
       });
       
@@ -323,13 +323,13 @@ class EmotionAnalysisService {
     if (language === 'ta') {
       const hasContent = text.trim().length > 10;
       if (hasContent && Object.values(emotions).every(v => v === 0)) {
-        console.log('ðŸ”§ No Tamil keywords matched, setting baseline concern for civic complaint');
+        console.log(' No Tamil keywords matched, setting baseline concern for civic complaint');
         emotions.concern = 0.3; // Set minimum concern for Tamil complaints
         emotions.urgency = 0.2; // Set minimum urgency
       }
     }
 
-    console.log(`ðŸ“Š Keyword analysis result:`, emotions);
+    console.log(` Keyword analysis result:`, emotions);
     return emotions;
   }
 
@@ -410,7 +410,7 @@ class EmotionAnalysisService {
     };
 
     const multiplier = categoryMultipliers[category] || 1.0;
-    console.log(`ðŸ·ï¸ Category "${category}" multiplier: ${multiplier}x`);
+    console.log(` Category "${category}" multiplier: ${multiplier}x`);
     return Math.min(score * multiplier, 1.0);
   }
 
@@ -422,45 +422,45 @@ class EmotionAnalysisService {
     
     const categoryPatterns = {
       // CRITICAL HEALTH HAZARDS - Health & Sanitation Keywords
-      'sewage_overflow': ['à¤¸à¥€à¤µà¥‡à¤œ', 'à¤¨à¤¾à¤²à¥€', 'à¤—à¤‚à¤¦à¤¾ à¤ªà¤¾à¤¨à¥€', 'à¤°à¤¿à¤¸à¤¾à¤µ', 'à¤˜à¥à¤Ÿ à¤°à¤¹à¥‡', 'à¤¬à¤¹à¤¨à¤¾', 'à¤«à¥‚à¤Ÿà¤¨à¤¾', 'sewage', 'drain overflow', 'dirty water', 'waste water', 'burst pipe', 'à®•à®´à®¿à®µà¯à®¨à¯€à®°à¯', 'à®µà®Ÿà®¿à®•à®¾à®²à¯'],
+      'sewage_overflow': ['', '', ' ', '', ' ', '', '', 'sewage', 'drain overflow', 'dirty water', 'waste water', 'burst pipe', '', ''],
       
-      'water_contamination': ['à¤ªà¤¾à¤¨à¥€ à¤•à¥€ à¤—à¥à¤£à¤µà¤¤à¥à¤¤à¤¾', 'à¤¦à¥‚à¤·à¤¿à¤¤ à¤ªà¤¾à¤¨à¥€', 'à¤ªà¥€à¤¨à¥‡ à¤•à¤¾ à¤ªà¤¾à¤¨à¥€', 'à¤—à¤‚à¤¦à¤¾ à¤ªà¤¾à¤¨à¥€', 'water quality', 'contaminated water', 'drinking water', 'dirty water', 'à®¤à®£à¯à®£à¯€à®°à¯ à®¤à®°à®®à¯', 'à®…à®šà¯à®¤à¯à®¤ à®¨à¯€à®°à¯'],
+      'water_contamination': ['  ', ' ', '  ', ' ', 'water quality', 'contaminated water', 'drinking water', 'dirty water', ' ', ' '],
       
-      'health_emergency': ['à¤¬à¥€à¤®à¤¾à¤°à¥€', 'à¤°à¥‹à¤—', 'à¤¸à¥à¤µà¤¾à¤¸à¥à¤¥à¥à¤¯', 'à¤¬à¤¦à¤¬à¥‚', 'à¤¦à¥à¤°à¥à¤—à¤‚à¤§', 'à¤¸à¤¡à¤¼à¤¨', 'à¤˜à¥à¤Ÿà¤¨', 'disease', 'illness', 'health emergency', 'contamination', 'stench', 'toxic', 'suffocating', 'à®¨à¯‹à®¯à¯', 'à®…à®šà¯à®¤à¯à®¤à®®à¯'],
+      'health_emergency': ['', '', '', '', '', '', '', 'disease', 'illness', 'health emergency', 'contamination', 'stench', 'toxic', 'suffocating', '', ''],
       
       // PUBLIC SAFETY ISSUES
-      'women_safety': ['à¤²à¤¡à¤¼à¤•à¤¿à¤¯à¥‹à¤‚ à¤•à¥€ à¤¸à¥à¤°à¤•à¥à¤·à¤¾', 'à¤®à¤¹à¤¿à¤²à¤¾à¤“à¤‚ à¤•à¥€ à¤¸à¥à¤°à¤•à¥à¤·à¤¾', 'women safety', 'girls safety', 'ladies safety', 'à®ªà¯†à®£à¯à®•à®³à¯ à®ªà®¾à®¤à¯à®•à®¾à®ªà¯à®ªà¯'],
+      'women_safety': ['  ', '  ', 'women safety', 'girls safety', 'ladies safety', ' '],
       
-      'night_safety': ['à¤°à¤¾à¤¤ à¤•à¥‡ à¤¸à¤®à¤¯', 'à¤…à¤‚à¤§à¥‡à¤°à¤¾', 'à¤¸à¥à¤Ÿà¥à¤°à¥€à¤Ÿ à¤²à¤¾à¤‡à¤Ÿ', 'night time', 'street light', 'lighting', 'dark', 'à®‡à®°à®µà¯ à®¨à¯‡à®°à®®à¯', 'à®¤à¯†à®°à¯ à®µà®¿à®³à®•à¯à®•à¯'],
+      'night_safety': ['  ', '', ' ', 'night time', 'street light', 'lighting', 'dark', ' ', ' '],
       
-      'broken_streetlight': ['à¤¸à¥à¤Ÿà¥à¤°à¥€à¤Ÿ à¤²à¤¾à¤‡à¤Ÿ', 'street light', 'lighting', 'light', 'lamp post', 'à¤¤à¤¾à¤° à¤«à¥‚à¤Ÿà¥‡', 'broken light'],
+      'broken_streetlight': [' ', 'street light', 'lighting', 'light', 'lamp post', ' ', 'broken light'],
       
       // INFRASTRUCTURE FAILURES  
-      'pothole': ['à¤—à¤¡à¥à¤¢à¥‡', 'à¤¸à¤¡à¤¼à¤• à¤•à¥‡ à¤—à¤¡à¥à¤¢à¥‡', 'potholes', 'road holes', 'à®šà®¾à®²à¯ˆ à®•à¯à®´à®¿'],
+      'pothole': ['', '  ', 'potholes', 'road holes', ' '],
       
-      'road_damage': ['à¤¸à¤¡à¤¼à¤•', 'à¤–à¤°à¤¾à¤¬ à¤¸à¤¡à¤¼à¤•', 'à¤Ÿà¥‚à¤Ÿà¥€ à¤¸à¤¡à¤¼à¤•', 'road damage', 'broken road', 'damaged road', 'à®šà®¾à®²à¯ˆ à®‰à®Ÿà¯ˆà®µà¯'],
+      'road_damage': ['', ' ', ' ', 'road damage', 'broken road', 'damaged road', ' '],
       
-      'water_logging': ['à¤ªà¤¾à¤¨à¥€ à¤­à¤°à¤¾', 'à¤œà¤² à¤œà¤®à¤¾à¤µ', 'water logging', 'flooded road', 'standing water'],
+      'water_logging': [' ', ' ', 'water logging', 'flooded road', 'standing water'],
       
-      'drain_blockage': ['à¤¨à¤¾à¤²à¥€ à¤¬à¤‚à¤¦', 'drain blocked', 'drainage problem', 'clogged drain'],
+      'drain_blockage': [' ', 'drain blocked', 'drainage problem', 'clogged drain'],
       
       // BASIC SERVICES
-      'garbage_collection': ['à¤•à¤šà¤°à¤¾', 'à¤—à¤‚à¤¦à¤—à¥€', 'à¤¸à¤«à¤¾à¤ˆ', 'garbage', 'waste', 'trash', 'cleaning', 'à®•à¯à®ªà¯à®ªà¯ˆ'],
+      'garbage_collection': ['', '', '', 'garbage', 'waste', 'trash', 'cleaning', ''],
       
-      'water_supply': ['à¤ªà¤¾à¤¨à¥€ à¤•à¥€ à¤†à¤ªà¥‚à¤°à¥à¤¤à¤¿', 'water supply', 'no water', 'à¤ªà¤¾à¤¨à¥€ à¤¨à¤¹à¥€à¤‚', 'à®¤à®£à¯à®£à¯€à®°à¯ à®µà®°à®¾à®¤à¯'],
+      'water_supply': ['  ', 'water supply', 'no water', ' ', ' '],
       
-      'power_outage': ['à¤¬à¤¿à¤œà¤²à¥€', 'electricity', 'power cut', 'à¤µà¤¿à¤¦à¥à¤¯à¥à¤¤', 'à®®à®¿à®©à¯à®šà®¾à®°à®®à¯'],
+      'power_outage': ['', 'electricity', 'power cut', '', ''],
       
-      'sanitation': ['à¤¸à¤¾à¤«-à¤¸à¤«à¤¾à¤ˆ', 'sanitation', 'hygiene', 'cleanliness'],
+      'sanitation': ['-', 'sanitation', 'hygiene', 'cleanliness'],
       
       // ENVIRONMENTAL ISSUES
-      'air_pollution': ['à¤ªà¥à¤°à¤¦à¥‚à¤·à¤£', 'à¤¹à¤µà¤¾ à¤•à¥€ à¤—à¥à¤£à¤µà¤¤à¥à¤¤à¤¾', 'air pollution', 'smoke', 'dust', 'à®•à®¾à®±à¯à®±à¯ à®®à®¾à®šà¯'],
+      'air_pollution': ['', '  ', 'air pollution', 'smoke', 'dust', ' '],
       
-      'noise_pollution': ['à¤¶à¥‹à¤°', 'à¤†à¤µà¤¾à¤œ', 'noise', 'sound pollution', 'loud', 'à®’à®²à®¿ à®®à®¾à®šà¯'],
+      'noise_pollution': ['', '', 'noise', 'sound pollution', 'loud', ' '],
       
-      'water_pollution': ['à¤ªà¤¾à¤¨à¥€ à¤•à¤¾ à¤ªà¥à¤°à¤¦à¥‚à¤·à¤£', 'water pollution', 'river pollution', 'à®¨à¯€à®°à¯ à®®à®¾à®šà¯'],
+      'water_pollution': ['  ', 'water pollution', 'river pollution', ' '],
       
-      'illegal_dumping': ['à¤…à¤µà¥ˆà¤§ à¤•à¤šà¤°à¤¾', 'illegal dumping', 'waste dumping', 'garbage dumping']
+      'illegal_dumping': [' ', 'illegal dumping', 'waste dumping', 'garbage dumping']
     };
 
     let detectedCategory = 'general';
@@ -481,7 +481,7 @@ class EmotionAnalysisService {
       }
     }
     
-    console.log(`ðŸŽ¯ Auto-detected category: "${detectedCategory}" (${maxMatches} keyword matches)`);
+    console.log(` Auto-detected category: "${detectedCategory}" (${maxMatches} keyword matches)`);
     return detectedCategory;
   }
 
@@ -490,10 +490,10 @@ class EmotionAnalysisService {
    */
   async analyzeEmotion(text, category = null) {
     try {
-      console.log('ðŸ§  Starting emotion analysis:', text.substring(0, 50));
+      console.log(' Starting emotion analysis:', text.substring(0, 50));
       
       const language = await this.detectLanguage(text);
-      console.log(`ðŸ“Š Detected language: ${language}`);
+      console.log(` Detected language: ${language}`);
 
       // Auto-detect category if not provided
       if (!category) {
@@ -505,24 +505,24 @@ class EmotionAnalysisService {
 
       // For Tamil text, prefer enhanced keyword analysis as it's more accurate
       if (language === 'ta') {
-        console.log('ðŸŒŸ Tamil text detected - using enhanced keyword analysis for better accuracy');
+        console.log(' Tamil text detected - using enhanced keyword analysis for better accuracy');
         emotions = this.analyzeWithEnhancedKeywords(text, language);
         analysisMethod = 'enhanced-keywords-tamil';
       } 
       // Try AI analysis first for other languages (if token is valid)
       else if (this.config.huggingFaceToken && this.config.huggingFaceToken.startsWith('hf_') && this.config.huggingFaceToken.length > 20) {
         try {
-          console.log('ðŸ¤– Attempting AI analysis...');
+          console.log(' Attempting AI analysis...');
           emotions = await this.analyzeWithAI(text);
           analysisMethod = 'ai-powered';
-          console.log('âœ… AI analysis successful');
+          console.log(' AI analysis successful');
         } catch (error) {
-          console.log('âš ï¸ AI failed, using enhanced keyword analysis');
+          console.log(' AI failed, using enhanced keyword analysis');
           emotions = this.analyzeWithEnhancedKeywords(text, language);
           analysisMethod = 'enhanced-keywords';
         }
       } else {
-        console.log('âš ï¸ Invalid or missing Hugging Face token, using enhanced keyword analysis');
+        console.log(' Invalid or missing Hugging Face token, using enhanced keyword analysis');
         emotions = this.analyzeWithEnhancedKeywords(text, language);
         analysisMethod = 'enhanced-keywords';
       }
@@ -534,10 +534,10 @@ class EmotionAnalysisService {
       const safetyBoost = this.detectSafetyConcerns(text);
       if (safetyBoost > 0) {
         adjustedScore = Math.min(adjustedScore + safetyBoost, 1.0);
-        console.log(`ðŸš¨ Safety concern detected, boosting score by ${(safetyBoost * 100).toFixed(1)}%`);
+        console.log(` Safety concern detected, boosting score by ${(safetyBoost * 100).toFixed(1)}%`);
       }
 
-      console.log('ðŸŽ¯ Analysis result:', { emotions, baseScore: emotionScore, finalScore: adjustedScore, method: analysisMethod, category });
+      console.log(' Analysis result:', { emotions, baseScore: emotionScore, finalScore: adjustedScore, method: analysisMethod, category });
 
       return {
         success: true,
@@ -548,7 +548,7 @@ class EmotionAnalysisService {
         category
       };
     } catch (error) {
-      console.error('âŒ Analysis failed:', error);
+      console.error(' Analysis failed:', error);
       
       return {
         success: false,
@@ -580,7 +580,7 @@ class EmotionAnalysisService {
     const angerBoost = this.detectAngerFromText(text);
     emotions.anger = Math.max(emotions.anger, angerBoost);
     
-    console.log('ðŸ” Enhanced keyword analysis complete:', emotions);
+    console.log(' Enhanced keyword analysis complete:', emotions);
     return emotions;
   }
 
@@ -592,9 +592,9 @@ class EmotionAnalysisService {
       // English
       'worried', 'concerned', 'afraid', 'scared', 'nervous', 'anxious', 'trouble', 'problem',
       // Hindi
-      'à¤šà¤¿à¤‚à¤¤à¤¿à¤¤', 'à¤ªà¤°à¥‡à¤¶à¤¾à¤¨', 'à¤¡à¤°à¤¾', 'à¤˜à¤¬à¤°à¤¾à¤¯à¤¾', 'à¤¸à¤®à¤¸à¥à¤¯à¤¾', 'à¤®à¥à¤¸à¥€à¤¬à¤¤',
+      '', '', '', '', '', '',
       // Tamil  
-      'à®•à®µà®²à¯ˆ', 'à®ªà®¯à®®', 'à®ªà®¿à®°à®šà¯à®šà®¿à®©à¯ˆ'
+      '', '', ''
     ];
 
     return this.calculateTextScore(text, concernIndicators, 0.3);
@@ -608,9 +608,9 @@ class EmotionAnalysisService {
       // English
       'angry', 'furious', 'outraged', 'mad', 'frustrated', 'fed up', 'enough',
       // Hindi
-      'à¤—à¥à¤¸à¥à¤¸à¤¾', 'à¤•à¥à¤°à¥‹à¤§', 'à¤¨à¤¾à¤°à¤¾à¤œà¤¼', 'à¤¬à¤¹à¥à¤¤ à¤ªà¤°à¥‡à¤¶à¤¾à¤¨',
+      '', '', '', ' ',
       // Tamil
-      'à®•à¯‹à®ªà®®à¯', 'à®Žà®°à®¿à®šà¯à®šà®²à¯'
+      '', ''
     ];
 
     return this.calculateTextScore(text, angerIndicators, 0.4);
@@ -656,7 +656,7 @@ router.post('/analyze', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('âŒ API Error:', error);
+    console.error(' API Error:', error);
     res.status(500).json({
       success: false,
       message: 'Emotion analysis failed',
@@ -668,8 +668,8 @@ router.post('/analyze', async (req, res) => {
 router.get('/test', async (req, res) => {
   const testCases = [
     { text: "The road has dangerous potholes and children fall down. Very worried about safety.", category: "pothole", language: "en" },
-    { text: "à¤‡à¤¸ à¤—à¤¡à¥à¤¢à¥‡ à¤•à¥‡ à¤•à¤¾à¤°à¤£ à¤•à¤ˆ à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾à¤à¤‚ à¤”à¤° à¤®à¥Œà¤¤à¥‡à¤‚ à¤¹à¥à¤ˆ à¤¹à¥ˆà¤‚ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤‡à¤¸à¥‡ à¤ à¥€à¤• à¤•à¤°à¥‡à¤‚", category: "pothole", language: "hi" },
-    { text: "à®šà®¾à®²à¯ˆà®¯à®¿à®²à¯ à®†à®ªà®¤à¯à®¤à®¾à®© à®•à¯à®´à®¿à®•à®³à¯ à®‰à®³à¯à®³à®©. à®¨à®¾à®©à¯ à®®à®¿à®•à®µà¯à®®à¯ à®•à®µà®²à¯ˆà®¯à®¾à®• à®‡à®°à¯à®•à¯à®•à®¿à®±à¯‡à®©à¯.", category: "pothole", language: "ta" }
+    { text: "             ", category: "pothole", language: "hi" },
+    { text: "   .    .", category: "pothole", language: "ta" }
   ];
 
   const results = [];
@@ -690,4 +690,5 @@ router.get('/test', async (req, res) => {
 });
 
 module.exports = router;
+
 

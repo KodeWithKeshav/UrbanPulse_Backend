@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 
 // Import the knowledge base using CommonJS
@@ -10,10 +10,10 @@ let knowledgeMatcher;
 const initializeKnowledgeBase = () => {
   try {
     knowledgeMatcher = new ChatbotKnowledgeMatcher();
-    console.log('✅ Chatbot Knowledge Base initialized successfully');
+    console.log(' Chatbot Knowledge Base initialized successfully');
     return true;
   } catch (error) {
-    console.error('❌ Failed to initialize Chatbot Knowledge Base:', error);
+    console.error(' Failed to initialize Chatbot Knowledge Base:', error);
     return false;
   }
 };
@@ -32,11 +32,11 @@ router.post('/message', async (req, res) => {
   try {
     const { message, conversationHistory = [], userId = 'anonymous' } = req.body;
 
-    console.log('🤖 Chatbot query:', { message, userId });
+    console.log(' Chatbot query:', { message, userId });
 
     // Check if knowledge base is initialized
     if (!knowledgeMatcher) {
-      console.log('⏳ Knowledge base not yet initialized, attempting to initialize...');
+      console.log(' Knowledge base not yet initialized, attempting to initialize...');
       await initializeKnowledgeBase();
       
       if (!knowledgeMatcher) {
@@ -96,7 +96,7 @@ router.post('/message', async (req, res) => {
       conversationSessions.delete(oldestKey);
     }
 
-    console.log('✅ Chatbot response generated:', {
+    console.log(' Chatbot response generated:', {
       category: response.category,
       confidence: response.confidence
     });
@@ -115,7 +115,7 @@ router.post('/message', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Chatbot error:', error);
+    console.error(' Chatbot error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to process chatbot message',
@@ -149,7 +149,7 @@ router.get('/history/:userId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ History retrieval error:', error);
+    console.error(' History retrieval error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve conversation history'
@@ -172,7 +172,7 @@ router.delete('/history/:userId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ History clearing error:', error);
+    console.error(' History clearing error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to clear conversation history'
@@ -228,7 +228,7 @@ router.get('/analytics', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Analytics error:', error);
+    console.error(' Analytics error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to generate analytics'
@@ -261,7 +261,7 @@ async function generateChatbotResponse(userMessage, matchResult, session) {
 
   // Add personalization based on conversation history
   if (session.messages.length > 5) {
-    enhancedResponse += "\n\n💡 *I notice you're exploring the app - feel free to ask me anything else!*";
+    enhancedResponse += "\n\n *I notice you're exploring the app - feel free to ask me anything else!*";
   }
 
   // Add time-based greetings
@@ -301,13 +301,13 @@ function isFollowUpQuestion(message, lastCategory) {
  */
 function generateFollowUpResponse(message, previousCategory) {
   const followUpResponses = {
-    submission_guide: "📋 **More about Complaint Submission:**\n\n• After submission, you get a unique complaint ID\n• Track progress in 'Personal Reports'\n• Updates sent via notifications\n• Average response time: 2-7 days\n• Urgent issues get priority handling\n• You can add follow-up comments",
+    submission_guide: " **More about Complaint Submission:**\n\n After submission, you get a unique complaint ID\n Track progress in 'Personal Reports'\n Updates sent via notifications\n Average response time: 2-7 days\n Urgent issues get priority handling\n You can add follow-up comments",
     
-    voting_system: "🗳️ **More about Voting:**\n\n• Each user gets one vote per complaint\n• You can change your vote anytime\n• Votes influence municipal priority\n• High-voted issues get faster response\n• Voting is anonymous and secure\n• Your vote helps the community voice",
+    voting_system: " **More about Voting:**\n\n Each user gets one vote per complaint\n You can change your vote anytime\n Votes influence municipal priority\n High-voted issues get faster response\n Voting is anonymous and secure\n Your vote helps the community voice",
     
-    civic_categories: "🏛️ **More about Civic Issues:**\n\n• Issues are auto-categorized by AI\n• Each category has different SLAs\n• Urgent issues bypass normal queue\n• Regular issues follow priority order\n• Status updates sent automatically\n• Resolution confirmed by photo evidence",
+    civic_categories: " **More about Civic Issues:**\n\n Issues are auto-categorized by AI\n Each category has different SLAs\n Urgent issues bypass normal queue\n Regular issues follow priority order\n Status updates sent automatically\n Resolution confirmed by photo evidence",
     
-    location_privacy: "🔐 **More about Privacy:**\n\n• Location data never shared with third parties\n• Used only for routing and priority\n• Automatically deleted after resolution\n• You control privacy level\n• Option to submit anonymously\n• Complies with data protection laws"
+    location_privacy: " **More about Privacy:**\n\n Location data never shared with third parties\n Used only for routing and priority\n Automatically deleted after resolution\n You control privacy level\n Option to submit anonymously\n Complies with data protection laws"
   };
 
   return followUpResponses[previousCategory] || 
@@ -315,3 +315,4 @@ function generateFollowUpResponse(message, previousCategory) {
 }
 
 module.exports = router;
+

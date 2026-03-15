@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 
@@ -8,7 +8,7 @@ const { supabase } = require('../config/supabase');
  */
 router.get('/dashboard', async (req, res) => {
   try {
-    console.log('🏛️ Transparency dashboard data requested');
+    console.log(' Transparency dashboard data requested');
     
     // Get all complaints with detailed information
     const { data: complaints, error: complaintsError } = await supabase
@@ -83,7 +83,7 @@ router.get('/dashboard', async (req, res) => {
       }
     };
     
-    console.log('📊 Transparency data calculated:', {
+    console.log(' Transparency data calculated:', {
       totalComplaints,
       resolutionRate,
       categoriesCount: categoryStats.length
@@ -284,3 +284,4 @@ function calculateVotingStats(complaints) {
 }
 
 module.exports = router;
+

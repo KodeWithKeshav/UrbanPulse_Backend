@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
@@ -18,10 +18,10 @@ class EmotionAnalysisService {
     // Enhanced multilingual keywords with extensive Tamil support
     this.emotionKeywords = {
       hi: { // Hindi
-        anger: ['à¤—à¥à¤¸à¥à¤¸à¤¾', 'à¤•à¥à¤°à¥‹à¤§', 'à¤¨à¤¾à¤°à¤¾à¤œà¤¼', 'à¤ªà¤°à¥‡à¤¶à¤¾à¤¨', 'à¤šà¤¿à¤¢à¤¼', 'à¤–à¤«à¤¾'],
-        urgency: ['à¤¤à¥à¤°à¤‚à¤¤', 'à¤œà¤²à¥à¤¦à¥€', 'à¤†à¤ªà¤¾à¤¤à¤•à¤¾à¤²', 'à¤–à¤¤à¤°à¤¨à¤¾à¤•', 'à¤…à¤­à¥€', 'à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾', 'à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾à¤à¤‚', 'à¤®à¥Œà¤¤', 'à¤®à¥Œà¤¤à¥‡à¤‚', 'à¤®à¥ƒà¤¤à¥à¤¯à¥'],
-        frustration: ['à¤ªà¤°à¥‡à¤¶à¤¾à¤¨', 'à¤¤à¤‚à¤—', 'à¤¦à¥à¤–à¥€', 'à¤šà¤¿à¤‚à¤¤à¤¿à¤¤', 'à¤¹à¥ˆà¤°à¤¾à¤¨', 'à¤¨à¤¿à¤°à¤¾à¤¶'],
-        concern: ['à¤šà¤¿à¤‚à¤¤à¤¾', 'à¤¡à¤°', 'à¤«à¤¿à¤•à¥à¤°', 'à¤˜à¤¬à¤°à¤¾à¤¹à¤Ÿ', 'à¤¬à¥‡à¤šà¥ˆà¤¨à¥€', 'à¤šà¤¿à¤‚à¤¤à¤¿à¤¤']
+        anger: ['', '', '', '', '', ''],
+        urgency: ['', '', '', '', '', '', '', '', '', ''],
+        frustration: ['', '', '', '', '', ''],
+        concern: ['', '', '', '', '', '']
       },
       en: { // English
         anger: ['angry', 'furious', 'mad', 'irritated', 'annoyed', 'frustrated'],
@@ -30,10 +30,10 @@ class EmotionAnalysisService {
         concern: ['worried', 'concerned', 'scared', 'afraid', 'anxious']
       },
       ta: { // Tamil - Comprehensive keywords
-        anger: ['à®•à¯‹à®ªà®®à¯', 'à®Žà®°à®¿à®šà¯à®šà®²à¯', 'à®šà¯€à®±à¯à®±à®®à¯', 'à®µà¯†à®±à¯à®ªà¯à®ªà¯', 'à®•à¯‹à®ªà®®à®¾à®•', 'à®Žà®°à®¿à®šà¯à®šà®²à®¾à®•', 'à®•à¯‹à®ªà®ªà¯à®ªà®Ÿà¯à®•à®¿à®±à¯‡à®©à¯', 'à®µà¯†à®±à¯à®•à¯à®•à®¿à®±à¯‡à®©à¯'],
-        urgency: ['à®…à®µà®šà®°à®®à¯', 'à®‰à®Ÿà®©à®Ÿà®¿', 'à®†à®ªà®¤à¯à®¤à¯', 'à®®à¯à®•à¯à®•à®¿à®¯à®®à¯', 'à®…à®µà®šà®°à®®à®¾à®•', 'à®‰à®Ÿà®©à®Ÿà®¿à®¯à®¾à®•', 'à®†à®ªà®¤à¯à®¤à®¾à®©', 'à®…à®µà®šà®°', 'à®®à®°à®£à®®à¯', 'à®µà®¿à®ªà®¤à¯à®¤à¯', 'à®‰à®¯à®¿à®°à¯à®•à¯à®•à¯ à®†à®ªà®¤à¯à®¤à¯'],
-        frustration: ['à®µà®°à¯à®¤à¯à®¤à®®à¯', 'à®à®®à®¾à®±à¯à®±à®®à¯', 'à®µà®°à¯à®¤à¯à®¤à®®à®¾à®•', 'à®à®®à®¾à®±à¯à®±à®®à®¾à®•', 'à®•à®·à¯à®Ÿà®®à¯', 'à®¤à¯à®©à¯à®ªà®®à¯', 'à®µà¯‡à®¤à®©à¯ˆ', 'à®šà¯‹à®•à®®à¯'],
-        concern: ['à®•à®µà®²à¯ˆ', 'à®ªà®¯à®®à¯', 'à®•à®µà®²à¯ˆà®¯à®¾à®•', 'à®ªà®¯à®®à®¾à®•', 'à®µà¯‡à®µà®²à¯ˆ', 'à®šà®¿à®¨à¯à®¤à®©à¯ˆ', 'à®ªà®°à®¿à®µà¯', 'à®•à®µà®©à®®à¯', 'à®‰à®³à¯ˆà®šà¯à®šà®²à¯', 'à®¨à¯†à®°à¯à®•à¯à®•à®Ÿà®¿']
+        anger: ['', '', '', '', '', '', '', ''],
+        urgency: ['', '', '', '', '', '', '', '', '', '', ' '],
+        frustration: ['', '', '', '', '', '', '', ''],
+        concern: ['', '', '', '', '', '', '', '', '', '']
       }
     };
   }
@@ -45,29 +45,29 @@ class EmotionAnalysisService {
     // Enhanced language detection based on Unicode ranges and common words
     const cleanText = text.trim();
     
-    // Tamil detection (Unicode range: U+0B80â€“U+0BFF)
+    // Tamil detection (Unicode range: U+0B80U+0BFF)
     const tamilChars = (cleanText.match(/[\u0B80-\u0BFF]/g) || []).length;
     if (tamilChars > 0) {
-      console.log(`ðŸ” Tamil characters detected: ${tamilChars} characters`);
+      console.log(` Tamil characters detected: ${tamilChars} characters`);
       return 'ta';
     }
     
-    // Hindi detection (Unicode range: U+0900â€“U+097F) 
+    // Hindi detection (Unicode range: U+0900U+097F) 
     const hindiChars = (cleanText.match(/[\u0900-\u097F]/g) || []).length;
     if (hindiChars > 0) {
-      console.log(`ðŸ” Hindi characters detected: ${hindiChars} characters`);
+      console.log(` Hindi characters detected: ${hindiChars} characters`);
       return 'hi';
     }
     
-    // Telugu detection (Unicode range: U+0C00â€“U+0C7F)
+    // Telugu detection (Unicode range: U+0C00U+0C7F)
     const teluguChars = (cleanText.match(/[\u0C00-\u0C7F]/g) || []).length;
     if (teluguChars > 0) {
-      console.log(`ðŸ” Telugu characters detected: ${teluguChars} characters`);
+      console.log(` Telugu characters detected: ${teluguChars} characters`);
       return 'te';
     }
     
     // Default to English
-    console.log(`ðŸ” No Indic scripts detected, defaulting to English`);
+    console.log(` No Indic scripts detected, defaulting to English`);
     return 'en';
   }
 
@@ -80,7 +80,7 @@ class EmotionAnalysisService {
         throw new Error('No Hugging Face API token');
       }
 
-      console.log('ðŸ¤– Calling Hugging Face multilingual sentiment API...');
+      console.log(' Calling Hugging Face multilingual sentiment API...');
       
       const response = await axios.post(
         this.config.apiUrl,
@@ -94,10 +94,10 @@ class EmotionAnalysisService {
         }
       );
 
-      console.log('âœ… AI Response:', response.data);
+      console.log(' AI Response:', response.data);
       return this.convertSentimentToEmotions(response.data, text, language);
     } catch (error) {
-      console.error('âŒ AI Analysis failed:', error.message);
+      console.error(' AI Analysis failed:', error.message);
       throw error;
     }
   }
@@ -111,11 +111,11 @@ class EmotionAnalysisService {
     if (Array.isArray(sentimentData) && sentimentData[0]) {
       const sentiment = sentimentData[0];
       
-      console.log(`ðŸŽ­ AI Sentiment result: ${sentiment.label} (${sentiment.score.toFixed(3)})`);
+      console.log(` AI Sentiment result: ${sentiment.label} (${sentiment.score.toFixed(3)})`);
       
       // If confidence is too low (especially for Tamil), boost with keyword analysis
       if (sentiment.score < 0.3 && language === 'ta') {
-        console.log('âš ï¸ Low confidence AI result for Tamil, boosting with keywords');
+        console.log(' Low confidence AI result for Tamil, boosting with keywords');
         const keywordBoost = this.analyzeWithKeywords(text, language);
         
         // Merge AI and keyword results
@@ -153,9 +153,9 @@ class EmotionAnalysisService {
       // English
       'death', 'deaths', 'died', 'accident', 'accidents', 'emergency', 'urgent', 'critical', 'dangerous',
       // Hindi  
-      'à¤®à¥Œà¤¤', 'à¤®à¥Œà¤¤à¥‡à¤‚', 'à¤®à¥ƒà¤¤à¥à¤¯à¥', 'à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾', 'à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾à¤à¤‚', 'à¤†à¤ªà¤¾à¤¤à¤•à¤¾à¤²', 'à¤–à¤¤à¤°à¤¨à¤¾à¤•', 'à¤—à¤‚à¤­à¥€à¤°',
+      '', '', '', '', '', '', '', '',
       // Tamil - Enhanced
-      'à®®à®°à®£à®®à¯', 'à®µà®¿à®ªà®¤à¯à®¤à¯', 'à®†à®ªà®¤à¯à®¤à¯', 'à®…à®µà®šà®°à®®à¯', 'à®‰à®Ÿà®©à®Ÿà®¿', 'à®…à®µà®šà®°à®®à®¾à®•', 'à®‰à®Ÿà®©à®Ÿà®¿à®¯à®¾à®•', 'à®†à®ªà®¤à¯à®¤à®¾à®©', 'à®‰à®¯à®¿à®°à¯à®•à¯à®•à¯ à®†à®ªà®¤à¯à®¤à¯'
+      '', '', '', '', '', '', '', '', ' '
     ];
 
     let urgencyScore = 0;
@@ -196,7 +196,7 @@ class EmotionAnalysisService {
     const emotions = { anger: 0, urgency: 0, frustration: 0, concern: 0 };
     const textLower = text.toLowerCase();
     
-    console.log(`ðŸ” Keyword analysis for language: ${language}`);
+    console.log(` Keyword analysis for language: ${language}`);
     
     Object.keys(emotions).forEach(emotion => {
       const emotionKeywords = keywords[emotion] || [];
@@ -207,7 +207,7 @@ class EmotionAnalysisService {
         if (textLower.includes(keyword.toLowerCase())) {
           score += 0.25;
           matchCount++;
-          console.log(`âœ… Found ${emotion} keyword: "${keyword}"`);
+          console.log(` Found ${emotion} keyword: "${keyword}"`);
         }
       });
       
@@ -218,13 +218,13 @@ class EmotionAnalysisService {
     if (language === 'ta') {
       const hasContent = text.trim().length > 10;
       if (hasContent && Object.values(emotions).every(v => v === 0)) {
-        console.log('ðŸ”§ No Tamil keywords matched, setting baseline concern');
+        console.log(' No Tamil keywords matched, setting baseline concern');
         emotions.concern = 0.3; // Set minimum concern for Tamil complaints
         emotions.urgency = 0.2; // Set minimum urgency
       }
     }
 
-    console.log(`ðŸ“Š Keyword analysis result:`, emotions);
+    console.log(` Keyword analysis result:`, emotions);
     return emotions;
   }
 
@@ -260,10 +260,10 @@ class EmotionAnalysisService {
    */
   async analyzeEmotion(text, category = null) {
     try {
-      console.log('ðŸ§  Starting emotion analysis:', text.substring(0, 50));
+      console.log(' Starting emotion analysis:', text.substring(0, 50));
       
       const language = await this.detectLanguage(text);
-      console.log(`ðŸ“Š Detected language: ${language}`);
+      console.log(` Detected language: ${language}`);
 
       let emotions = {};
       let analysisMethod = '';
@@ -273,9 +273,9 @@ class EmotionAnalysisService {
         try {
           emotions = await this.analyzeWithAI(text, language);
           analysisMethod = 'ai-powered';
-          console.log('âœ… AI analysis successful');
+          console.log(' AI analysis successful');
         } catch (error) {
-          console.log('âš ï¸ AI failed, using keywords');
+          console.log(' AI failed, using keywords');
           emotions = this.analyzeWithKeywords(text, language);
           analysisMethod = 'keyword-fallback';
         }
@@ -287,7 +287,7 @@ class EmotionAnalysisService {
       const emotionScore = this.calculateEmotionScore(emotions);
       const adjustedScore = this.applyCategoryAdjustments(emotionScore, category);
 
-      console.log('ðŸŽ¯ Analysis result:', { emotions, score: adjustedScore, method: analysisMethod });
+      console.log(' Analysis result:', { emotions, score: adjustedScore, method: analysisMethod });
 
       return {
         success: true,
@@ -297,7 +297,7 @@ class EmotionAnalysisService {
         analysisMethod
       };
     } catch (error) {
-      console.error('âŒ Analysis failed:', error);
+      console.error(' Analysis failed:', error);
       
       return {
         success: false,
@@ -334,7 +334,7 @@ router.post('/analyze', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('âŒ API Error:', error);
+    console.error(' API Error:', error);
     res.status(500).json({
       success: false,
       message: 'Emotion analysis failed',
@@ -346,8 +346,8 @@ router.post('/analyze', async (req, res) => {
 router.get('/test', async (req, res) => {
   const testCases = [
     { text: "The road has dangerous potholes and children fall down. Very worried about safety.", category: "pothole", language: "en" },
-    { text: "à¤‡à¤¸ à¤—à¤¡à¥à¤¢à¥‡ à¤•à¥‡ à¤•à¤¾à¤°à¤£ à¤•à¤ˆ à¤¦à¥à¤°à¥à¤˜à¤Ÿà¤¨à¤¾à¤à¤‚ à¤”à¤° à¤®à¥Œà¤¤à¥‡à¤‚ à¤¹à¥à¤ˆ à¤¹à¥ˆà¤‚ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤‡à¤¸à¥‡ à¤ à¥€à¤• à¤•à¤°à¥‡à¤‚", category: "pothole", language: "hi" },
-    { text: "à®šà®¾à®²à¯ˆà®¯à®¿à®²à¯ à®†à®ªà®¤à¯à®¤à®¾à®© à®•à¯à®´à®¿à®•à®³à¯ à®‰à®³à¯à®³à®©. à®¨à®¾à®©à¯ à®®à®¿à®•à®µà¯à®®à¯ à®•à®µà®²à¯ˆà®¯à®¾à®• à®‡à®°à¯à®•à¯à®•à®¿à®±à¯‡à®©à¯.", category: "pothole", language: "ta" }
+    { text: "             ", category: "pothole", language: "hi" },
+    { text: "   .    .", category: "pothole", language: "ta" }
   ];
 
   const results = [];
@@ -368,4 +368,5 @@ router.get('/test', async (req, res) => {
 });
 
 module.exports = router;
+
 

@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const HeatMapService = require('../services/HeatMapService');
 
@@ -10,7 +10,7 @@ const heatMapService = new HeatMapService();
  */
 router.get('/data', async (req, res) => {
   try {
-    console.log('🗺️ Heat map data requested');
+    console.log(' Heat map data requested');
     
     const filters = {
       dateRange: parseInt(req.query.days) || 30, // Last 30 days by default
@@ -18,11 +18,11 @@ router.get('/data', async (req, res) => {
       complaintType: req.query.type
     };
 
-    console.log('🔍 Filters applied:', filters);
+    console.log(' Filters applied:', filters);
 
     const heatMapData = await heatMapService.getComplaintHeatMapData(filters);
     
-    console.log(`✅ Returning ${heatMapData.points.length} complaint points`);
+    console.log(` Returning ${heatMapData.points.length} complaint points`);
     
     res.json({
       success: true,
@@ -32,7 +32,7 @@ router.get('/data', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Heat map data error:', error);
+    console.error(' Heat map data error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch heat map data',
@@ -47,12 +47,12 @@ router.get('/data', async (req, res) => {
  */
 router.get('/statistics', async (req, res) => {
   try {
-    console.log('📊 Statistics requested');
+    console.log(' Statistics requested');
     
     const timeRange = parseInt(req.query.days) || 30;
     const statistics = await heatMapService.getComplaintStatistics(timeRange);
     
-    console.log('✅ Statistics calculated:', {
+    console.log(' Statistics calculated:', {
       total: statistics.total,
       resolved: statistics.resolved,
       resolutionRate: statistics.resolutionRate
@@ -66,7 +66,7 @@ router.get('/statistics', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Statistics error:', error);
+    console.error(' Statistics error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch statistics',
@@ -81,7 +81,7 @@ router.get('/statistics', async (req, res) => {
  */
 router.get('/filtered', async (req, res) => {
   try {
-    console.log('🔍 Filtered heat map data requested');
+    console.log(' Filtered heat map data requested');
     
     const filters = {
       dateRange: parseInt(req.query.days) || 30,
@@ -101,11 +101,11 @@ router.get('/filtered', async (req, res) => {
       }
     });
 
-    console.log('🔍 Applied filters:', filters);
+    console.log(' Applied filters:', filters);
 
     const heatMapData = await heatMapService.getFilteredHeatMapData(filters);
     
-    console.log(`✅ Returning ${heatMapData.points.length} filtered points`);
+    console.log(` Returning ${heatMapData.points.length} filtered points`);
     
     res.json({
       success: true,
@@ -115,7 +115,7 @@ router.get('/filtered', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Filtered heat map error:', error);
+    console.error(' Filtered heat map error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch filtered heat map data',
@@ -130,7 +130,7 @@ router.get('/filtered', async (req, res) => {
  */
 router.post('/refresh', async (req, res) => {
   try {
-    console.log('🔄 Heat map refresh requested');
+    console.log(' Heat map refresh requested');
     
     // Force refresh by fetching fresh data
     const heatMapData = await heatMapService.getComplaintHeatMapData({ 
@@ -138,7 +138,7 @@ router.post('/refresh', async (req, res) => {
       forceRefresh: true 
     });
     
-    console.log(`✅ Heat map refreshed with ${heatMapData.points.length} points`);
+    console.log(` Heat map refreshed with ${heatMapData.points.length} points`);
     
     res.json({
       success: true,
@@ -148,7 +148,7 @@ router.post('/refresh', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Heat map refresh error:', error);
+    console.error(' Heat map refresh error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to refresh heat map data',
@@ -164,7 +164,7 @@ router.post('/refresh', async (req, res) => {
 router.get('/complaint/:id', async (req, res) => {
   try {
     const complaintId = req.params.id;
-    console.log(`🔍 Complaint details requested for ID: ${complaintId}`);
+    console.log(` Complaint details requested for ID: ${complaintId}`);
     
     // This would fetch detailed complaint info from database
     // For now, return basic info
@@ -179,7 +179,7 @@ router.get('/complaint/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Complaint details error:', error);
+    console.error(' Complaint details error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch complaint details',
@@ -189,3 +189,4 @@ router.get('/complaint/:id', async (req, res) => {
 });
 
 module.exports = router;
+
