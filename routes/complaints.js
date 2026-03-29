@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 const LocationPriorityService = require('../services/LocationPriorityService');
@@ -426,6 +426,33 @@ async function calculateComprehensivePriority({ imageValidation, locationData, c
   const startTime = Date.now();
   
   try {
+    
+    // Skip slow Google Places API calls if key is not configured
+    // Without the key, LocationPriorityService retries dozens of calls with exponential backoff,
+    // causing 30-60+ second hangs before falling back anyway
+    if (!process.env.GOOGLE_PLACES_API_KEY) {
+      console.log(' Google Places API key not configured - using fast fallback priority');
+      const fallbackScore = getFallbackPriority(category);
+      const imageScore = imageValidation?.confidence || imageValidation?.modelConfidence || 0;
+      const totalScore = Math.min((fallbackScore * 0.6) + (imageScore * 0.4), 0.999);
+      
+      return {
+        totalScore,
+        priorityLevel: totalScore >= 0.8 ? 'CRITICAL' : totalScore >= 0.6 ? 'HIGH' : totalScore >= 0.4 ? 'MEDIUM' : 'LOW',
+        locationScore: 0,
+        imageScore,
+        reasoning: `Priority assigned based on complaint type (${category}). Location analysis unavailable (Google Places API not configured).`,
+        facilitiesCount: 0,
+        processingTime: Date.now() - startTime,
+        breakdown: {
+          infrastructureScore: 0,
+          imageValidationScore: imageScore,
+          ageScore: 1.0,
+          voteScore: 0,
+          statusMultiplier: 1.0
+        }
+      };
+    }
     
     let priorityResult = null;
     
