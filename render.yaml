@@ -1,0 +1,61 @@
+services:
+  - type: web
+    name: civic-rezo-backend
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: JWT_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: ROBOFLOW_API_KEY
+        sync: false
+      - key: ROBOFLOW_WORKSPACE
+        sync: false
+      - key: ROBOFLOW_WORKFLOW
+        sync: false
+      - key: ROBOFLOW_API_URL
+        value: https://serverless.roboflow.com
+      - key: ROBOFLOW_MODEL_ENDPOINT
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: USE_OPENSTREETMAP
+        value: true
+      - key: NOMINATIM_URL
+        value: https://nominatim.openstreetmap.org
+      - key: OVERPASS_URL
+        value: https://overpass-api.de/api/interpreter
+      - key: OSRM_URL
+        value: https://router.project-osrm.org
+      - key: PLACES_SEARCH_RADIUS
+        value: 1000
+      - key: MAX_PLACES_RESULTS
+        value: 20
+      - key: LOCATION_CACHE_DURATION
+        value: 86400
+      - key: ENABLE_LOCATION_FALLBACK
+        value: true
+      - key: PLACES_API_RATE_LIMIT
+        value: 100
+      - key: GEOCODING_API_RATE_LIMIT
+        value: 50
+      - key: WIT_AI_TOKEN
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
