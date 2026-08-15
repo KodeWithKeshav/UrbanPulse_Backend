@@ -13,7 +13,7 @@ const locationPriorityService = new LocationPriorityService();
 // Function to check the complaints table schema
 async function checkComplaintsTableSchema() {
   try {
-    console.log(' Checking complaints table schema...');
+    console.log('📊 Checking complaints table schema...');
     // Introspect the table schema to see column names
     const { data, error } = await supabase
       .from('complaints')
@@ -21,19 +21,19 @@ async function checkComplaintsTableSchema() {
       .limit(1);
       
     if (error) {
-      console.error(' Schema check error:', error);
+      console.error('❌ Schema check error:', error);
       return null;
     }
     
     if (data && data.length > 0) {
-      console.log(' Available columns in complaints table:', Object.keys(data[0]));
+      console.log('📋 Available columns in complaints table:', Object.keys(data[0]));
       return Object.keys(data[0]);
     } else {
-      console.log(' No records in complaints table to infer schema');
+      console.log('ℹ️ No records in complaints table to infer schema');
       return [];
     }
   } catch (error) {
-    console.error(' Schema check failed:', error);
+    console.error('❌ Schema check failed:', error);
     return null;
   }
 }
@@ -57,10 +57,10 @@ async function filterComplaintDataForInsertion(complaintData, availableColumns) 
       // Ensure value is a number between 0 and 9.99
       if (typeof filteredData[field] === 'number') {
         if (filteredData[field] >= 10) {
-          console.log(` Adjusting ${field} from ${filteredData[field]} to 9.99 to prevent overflow`);
+          console.log(`⚠️ Adjusting ${field} from ${filteredData[field]} to 9.99 to prevent overflow`);
           filteredData[field] = 9.99;
         } else if (filteredData[field] < 0) {
-          console.log(` Adjusting ${field} from ${filteredData[field]} to 0 to ensure positive value`);
+          console.log(`⚠️ Adjusting ${field} from ${filteredData[field]} to 0 to ensure positive value`);
           filteredData[field] = 0;
         } else {
           // Ensure we're working with 2 decimal places max
@@ -70,19 +70,19 @@ async function filterComplaintDataForInsertion(complaintData, availableColumns) 
     }
   });
   
-  console.log('Filtered complaint data for insertion:', filteredData);
+  console.log('📝 Filtered complaint data for insertion:', filteredData);
   return filteredData;
 }
 
 router.post('/submit', async (req, res) => {
   try {
-    console.log('New complaint submission:', req.body);
+    console.log('📝 New complaint submission:', req.body);
     
-    
+    // Check if user is authenticated
     const authenticatedUser = req.user;
-    console.log('Authenticated user:', authenticatedUser ? authenticatedUser.id : 'None');
+    console.log('👤 Authenticated user:', authenticatedUser ? authenticatedUser.id : 'None');
     
-    
+    // Check the table schema first
     const columns = await checkComplaintsTableSchema() || [];
     
     const {
@@ -113,6 +113,7 @@ router.post('/submit', async (req, res) => {
       description
     });
     
+    // Generate a proper UUID for demo users or use the provided userId if it's in UUID format
     const generateUuid = () => {
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -120,6 +121,7 @@ router.post('/submit', async (req, res) => {
       });
     };
     
+    // Validate if string is a UUID
     const isUuid = (str) => {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       return uuidRegex.test(str);
@@ -127,53 +129,57 @@ router.post('/submit', async (req, res) => {
     
     // Create or ensure the demo user exists for foreign key constraint
     const ensureDemoUser = async () => {
-      console.log('Checking for demo user...');
+      console.log('🔍 Checking for demo user...');
       
       // First, check if our default demo user exists
       const { data: existingUser, error: findError } = await supabase
         .from('users')
         .select('id')
-        .eq('email', 'demo@urbanpulse.org')
+        .eq('email', 'demo@civicrezo.org')
         .limit(1);
       
       if (findError) {
-        console.error(' Error checking for demo user:', findError);
+        console.error('❌ Error checking for demo user:', findError);
       }
       
       // If user exists, return its ID
       if (existingUser && existingUser.length > 0) {
-        console.log(' Using existing demo user:', existingUser[0].id);
+        console.log('✅ Using existing demo user:', existingUser[0].id);
         return existingUser[0].id;
       }
       
-      console.log(' Demo user not found, creating one...');
+      console.log('⚠️ Demo user not found, creating one...');
       
+      // Check if the RPC function exists by trying to call it
       try {
         const { data: demoId, error: rpcError } = await supabase.rpc('create_demo_user');
         
         if (!rpcError && demoId) {
-          console.log(' Created demo user via RPC:', demoId);
+          console.log('✅ Created demo user via RPC:', demoId);
           return demoId;
         }
         
         if (rpcError) {
-          console.log(' RPC function not available:', rpcError.message);
+          console.log('⚠️ RPC function not available:', rpcError.message);
+          // Fall back to direct insert
         }
       } catch (e) {
-        console.log(' RPC call failed, falling back to direct insert');
+        console.log('⚠️ RPC call failed, falling back to direct insert');
       }
       
+      // If RPC failed or isn't available, try direct insert
       const demoUuid = generateUuid();
       
       try {
+        // Use raw SQL to ensure the insert works correctly with the database schema
         const { data, error: sqlError } = await supabase.rpc('execute_sql', {
           sql_query: `
             INSERT INTO users (
               id, email, password, full_name, phone_number, 
               user_type, address, is_active, created_at, updated_at
             ) VALUES (
-              '${Uuid}', '${email}',
-              '${username}', '${phNo}', 'citizen', '${address}', 
+              '${demoUuid}', 'demo@civicrezo.org', 'not-a-real-password', 
+              'Demo User', '1234567890', 'citizen', 'Demo Address', 
               true, NOW(), NOW()
             )
             RETURNING id;
@@ -181,20 +187,21 @@ router.post('/submit', async (req, res) => {
         });
         
         if (sqlError) {
-          console.error(' SQL error creating demo user:', sqlError);
+          console.error('❌ SQL error creating demo user:', sqlError);
         } else {
-          console.log(' Created demo user via SQL:', data);
+          console.log('✅ Created demo user via SQL:', data);
           return demoUuid;
         }
       } catch (sqlExecError) {
-        console.error(' SQL execution error:', sqlExecError);
+        console.error('❌ SQL execution error:', sqlExecError);
       }
       
+      // Last attempt: standard insert
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
           id: demoUuid,
-          email: 'demo@urbanpulse.org',
+          email: 'demo@civicrezo.org',
           password: 'not-a-real-password-hash',
           full_name: 'Demo User',
           phone_number: '1234567890',
@@ -207,13 +214,13 @@ router.post('/submit', async (req, res) => {
         .select();
       
       if (insertError) {
-        console.error(' Error creating demo user:', insertError);
+        console.error('❌ Error creating demo user:', insertError);
         // All attempts failed, but we need to return something
-        console.log(' All demo user creation methods failed, using generated UUID as fallback');
+        console.log('⚠️ All demo user creation methods failed, using generated UUID as fallback');
         return demoUuid;
       }
       
-      console.log(' Created new demo user:', newUser[0].id);
+      console.log('✅ Created new demo user:', newUser[0].id);
       return newUser[0].id;
     };
     
@@ -222,18 +229,18 @@ router.post('/submit', async (req, res) => {
     
     // If user is authenticated, use their ID
     if (authenticatedUser && authenticatedUser.id) {
-      console.log(` Using authenticated user_id: ${authenticatedUser.id}`);
+      console.log(`🔑 Using authenticated user_id: ${authenticatedUser.id}`);
       userUuid = authenticatedUser.id;
     } 
     // If userId is provided in the request and it's a valid UUID, use it
     else if (isUuid(userId)) {
-      console.log(` Using provided user_id: ${userId}`);
+      console.log(`🔑 Using provided user_id: ${userId}`);
       userUuid = userId;
     } 
     // Otherwise create or find a demo user
     else {
       userUuid = await ensureDemoUser();
-      console.log(` Using demo user_id: ${userUuid}`);
+      console.log(`🔑 Using demo user_id: ${userUuid}`);
     }
     
     // Create a base complaint object with essential fields
@@ -297,7 +304,7 @@ router.post('/submit', async (req, res) => {
         .select();
       
       if (error) {
-        console.error(' Supabase insert error:', error);
+        console.error('❌ Supabase insert error:', error);
         
         // Provide more specific error handling for numeric overflow
         if (error.code === '22003' && error.message.includes('numeric field overflow')) {
@@ -308,7 +315,7 @@ router.post('/submit', async (req, res) => {
       }
       
       complaint = data;
-      console.log(' Complaint saved to Supabase:', complaint);
+      console.log('✅ Complaint saved to Supabase:', complaint);
       
       // After successful complaint submission, create an initial complaint update entry
       if (complaint && complaint[0] && complaint[0].id) {
@@ -327,9 +334,9 @@ router.post('/submit', async (req, res) => {
           }]);
         
         if (updateError) {
-          console.error(' Error creating complaint update entry:', updateError);
+          console.error('❌ Error creating complaint update entry:', updateError);
         } else {
-          console.log(' Added initial complaint update entry');
+          console.log('✅ Added initial complaint update entry');
         }
         
         
@@ -353,22 +360,22 @@ router.post('/submit', async (req, res) => {
             }]);
           
           if (voteError) {
-            console.error(' Error creating complaint vote entry:', voteError);
+            console.error('❌ Error creating complaint vote entry:', voteError);
           } else {
-            console.log(' Added initial complaint vote entry');
+            console.log('✅ Added initial complaint vote entry');
           }
         } catch (voteErr) {
-          console.error(' Exception in complaint vote creation:', voteErr);
+          console.error('❌ Exception in complaint vote creation:', voteErr);
         }
       }
     } catch (dbError) {
-      console.error(' Database operation failed:', dbError);
+      console.error('❌ Database operation failed:', dbError);
       
       // Attempt to get table schema directly (alternative approach)
       try {
         const { data: schema } = await supabase.rpc('get_table_columns', { table_name: 'complaints' });
         if (schema) {
-          console.log(' Complaints table columns:', schema);
+          console.log('📊 Complaints table columns:', schema);
         }
       } catch (e) {
         console.error('Could not fetch schema via RPC:', e);
@@ -378,21 +385,24 @@ router.post('/submit', async (req, res) => {
     }
     
     // Prepare response - safe access in case structure changed
-    const complaintRecord = complaint && complaint[0] ? complaint[0] : {}; 
-    
+    const complaintRecord = complaint && complaint[0] ? complaint[0] : {};
+
+    const finalScore = Number(priorityAnalysis.totalScore || 0);
+    const finalPriorityLevel = getPriorityLevelFromScore(finalScore);
+
     const response = {
       success: true,
       complaint: {
         id: complaintRecord.id || `temp-${Date.now()}`,
         title: complaintRecord.title || title,
         category: complaintRecord.category || category,
-        priorityScore: complaintRecord.priority_score || Math.round(priorityAnalysis.totalScore * 100),
+        priorityScore: Math.round(finalScore * 100),
         status: complaintRecord.status || 'pending',
         submittedAt: complaintRecord.created_at || new Date().toISOString()
       },
       priorityAnalysis: {
-        totalScore: priorityAnalysis.totalScore,
-        priorityLevel: priorityAnalysis.priorityLevel,
+        totalScore: finalScore,
+        priorityLevel: finalPriorityLevel,
         breakdown: {
           locationScore: priorityAnalysis.locationScore,
           imageScore: priorityAnalysis.imageScore,
@@ -402,15 +412,15 @@ router.post('/submit', async (req, res) => {
       },
       location: {
         privacyLevel: locationData.privacyLevel,
-        accuracy: locationData.accuracy ? `${locationData.accuracy}m` : 'Unknown',
+        accuracy: locationData.accuracy ? `±${locationData.accuracy}m` : 'Unknown',
         description: locationData.description
       },
-      nextSteps: generateNextSteps(priorityAnalysis.priorityLevel, category),
+      nextSteps: generateNextSteps(finalPriorityLevel, category),
     };
     
     res.json(response);
   } catch (error) {
-    console.error(' Complaint submission error:', error);
+    console.error('❌ Complaint submission error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to submit complaint',
@@ -421,45 +431,20 @@ router.post('/submit', async (req, res) => {
   }
 });
 
-
+/**
+ * Calculate comprehensive priority score combining image and location analysis
+ */
 async function calculateComprehensivePriority({ imageValidation, locationData, category, description }) {
   const startTime = Date.now();
   
   try {
-    
-    // Skip slow Google Places API calls if key is not configured
-    // Without the key, LocationPriorityService retries dozens of calls with exponential backoff,
-    // causing 30-60+ second hangs before falling back anyway
-    if (!process.env.GOOGLE_PLACES_API_KEY) {
-      console.log(' Google Places API key not configured - using fast fallback priority');
-      const fallbackScore = getFallbackPriority(category);
-      const imageScore = imageValidation?.confidence || imageValidation?.modelConfidence || 0;
-      const totalScore = Math.min((fallbackScore * 0.6) + (imageScore * 0.4), 0.999);
-      
-      return {
-        totalScore,
-        priorityLevel: totalScore >= 0.8 ? 'CRITICAL' : totalScore >= 0.6 ? 'HIGH' : totalScore >= 0.4 ? 'MEDIUM' : 'LOW',
-        locationScore: 0,
-        imageScore,
-        reasoning: `Priority assigned based on complaint type (${category}). Location analysis unavailable (Google Places API not configured).`,
-        facilitiesCount: 0,
-        processingTime: Date.now() - startTime,
-        breakdown: {
-          infrastructureScore: 0,
-          imageValidationScore: imageScore,
-          ageScore: 1.0,
-          voteScore: 0,
-          statusMultiplier: 1.0
-        }
-      };
-    }
-    
+    // Use our new comprehensive priority score calculation method
     let priorityResult = null;
     
-    
+    // Check if we have all necessary data
     if (locationData && locationData.latitude && locationData.longitude) {
       try {
-       
+        // Use our new method from LocationPriorityService
         priorityResult = await locationPriorityService.calculateComprehensivePriority(
           locationData.latitude,
           locationData.longitude,
@@ -478,7 +463,7 @@ async function calculateComprehensivePriority({ imageValidation, locationData, c
           }
         );
         
-        console.log('New priority calculation result:', priorityResult);
+        console.log('✅ New priority calculation result:', priorityResult);
         
         return {
           totalScore: priorityResult.priorityScore,
@@ -491,7 +476,7 @@ async function calculateComprehensivePriority({ imageValidation, locationData, c
           breakdown: priorityResult.breakdown
         };
       } catch (priorityErr) {
-        console.error('New priority calculation error:', priorityErr);
+        console.error('❌ New priority calculation error:', priorityErr);
         // Fall back to original calculation
       }
     }
@@ -560,7 +545,7 @@ async function calculateComprehensivePriority({ imageValidation, locationData, c
     };
     
   } catch (error) {
-    console.error(' Priority calculation error:', error);
+    console.error('❌ Priority calculation error:', error);
     
     // Fallback priority based on complaint category
     const fallbackScore = getFallbackPriority(category);
@@ -657,6 +642,13 @@ function getCategoryImportance(category) {
   return categoryImportance[category] || 'standard';
 }
 
+function getPriorityLevelFromScore(score) {
+  if (score >= 0.8) return 'CRITICAL';
+  if (score >= 0.6) return 'HIGH';
+  if (score >= 0.4) return 'MEDIUM';
+  return 'LOW';
+}
+
 /**
  * Generate next steps based on priority level and category
  */
@@ -669,14 +661,14 @@ function generateNextSteps(priorityLevel, category) {
 
   if (priorityLevel === 'CRITICAL') {
     return [
-      ' Your complaint has been marked as CRITICAL priority.',
+      '🚨 Your complaint has been marked as CRITICAL priority.',
       'An urgent response team will be notified immediately.',
       'Expect a response within 24 hours.',
       'You can track real-time updates in your dashboard.'
     ];
   } else if (priorityLevel === 'HIGH') {
     return [
-      ' Your complaint has been marked as HIGH priority.',
+      '⚠️ Your complaint has been marked as HIGH priority.',
       'It will be reviewed by municipal staff within 48 hours.',
       'You will receive updates when your complaint status changes.',
       'Local authorities have been notified about this issue.'
@@ -730,7 +722,7 @@ router.get('/', async (req, res) => {
     
     // Apply location-based filtering if latitude, longitude, and radius are provided
     if (latitude && longitude && radius) {
-      console.log(` Filtering complaints by location: lat=${latitude}, lng=${longitude}, radius=${radius}m`);
+      console.log(`🌎 Filtering complaints by location: lat=${latitude}, lng=${longitude}, radius=${radius}m`);
       
       // Calculate the approximate distance in degrees for the radius
       const radiusInDegrees = parseFloat(radius) / 111000; // 1 degree is approximately 111km
@@ -791,7 +783,7 @@ router.get('/', async (req, res) => {
     
     // Log the vote counts to help with debugging
     if (data) {
-      console.log(` Returning ${data.length} complaints with vote counts:`, 
+      console.log(`📊 Returning ${data.length} complaints with vote counts:`, 
         data.map(c => ({id: c.id, votes: c.vote_count || 0, userVoted: c.userVoted || false}))
       );
     }
@@ -821,7 +813,7 @@ router.get('/', async (req, res) => {
  */
 router.get('/all', async (req, res) => {
   try {
-    console.log(' Fetching all complaints');
+    console.log('📋 Fetching all complaints');
     
     const { data, error } = await supabase
       .from('complaints')
@@ -832,7 +824,7 @@ router.get('/all', async (req, res) => {
       throw new Error(error.message);
     }
     
-    console.log(` Successfully fetched ${data.length} complaints`);
+    console.log(`✅ Successfully fetched ${data.length} complaints`);
     
     res.json({
       success: true,
@@ -851,7 +843,7 @@ router.get('/all', async (req, res) => {
 router.get('/personal-reports', async (req, res) => {
   try {
     const userId = req.user?.id;
-    console.log(' Getting personal reports for user ID:', userId);
+    console.log('🔍 Getting personal reports for user ID:', userId);
 
     if (!userId) {
       return res.status(401).json({
@@ -904,7 +896,7 @@ router.get('/personal-reports', async (req, res) => {
           status: 'completed',
           date: complaint.created_at,
           description: 'Your complaint has been received and is being reviewed',
-          icon: ''
+          icon: '📝'
         },
         {
           id: 2,
@@ -913,7 +905,7 @@ router.get('/personal-reports', async (req, res) => {
                  workflow?.step_1_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_1_timestamp,
           description: 'Our team is reviewing your complaint for validity and priority',
-          icon: '',
+          icon: '🔍',
           officer: workflow?.step_1_officer_id ? 'Assigned to officer' : null
         },
         {
@@ -923,7 +915,7 @@ router.get('/personal-reports', async (req, res) => {
                  workflow?.step_2_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_2_timestamp,
           description: 'Field assessment and resource planning in progress',
-          icon: '',
+          icon: '📋',
           officer: workflow?.step_2_officer_id ? 'Officer assigned' : null,
           estimatedCost: workflow?.step_2_estimated_cost
         },
@@ -934,7 +926,7 @@ router.get('/personal-reports', async (req, res) => {
                  workflow?.step_3_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_3_timestamp,
           description: 'Resolution work is being carried out',
-          icon: '',
+          icon: '🔧',
           contractor: workflow?.step_3_contractor_id ? 'Contractor assigned' : null,
           startDate: workflow?.step_3_start_date
         },
@@ -944,7 +936,7 @@ router.get('/personal-reports', async (req, res) => {
           status: complaint.status === 'resolved' ? 'completed' : 'pending',
           date: workflow?.step_3_completion_date || (complaint.status === 'resolved' ? complaint.updated_at : null),
           description: complaint.status === 'resolved' ? 'Issue has been resolved successfully' : 'Awaiting completion',
-          icon: complaint.status === 'resolved' ? '' : '',
+          icon: complaint.status === 'resolved' ? '✅' : '⏳',
           photos: workflow?.step_3_completion_photos
         }
       ];
@@ -966,7 +958,7 @@ router.get('/personal-reports', async (req, res) => {
       cancelled: complaints?.filter(c => c.status === 'cancelled').length || 0
     };
 
-    console.log(' Personal reports fetched successfully:', stats);
+    console.log('✅ Personal reports fetched successfully:', stats);
 
     res.json({
       success: true,
@@ -1000,7 +992,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    console.log(` Fetching complaint details for ID: ${complaintId}`);
+    console.log(`🔍 Fetching complaint details for ID: ${complaintId}`);
 
     // Get complaint details
     const { data: complaint, error } = await supabase
@@ -1017,7 +1009,7 @@ router.get('/:id', async (req, res) => {
       .single();
 
     if (error) {
-      console.error(' Error fetching complaint:', error);
+      console.error('❌ Error fetching complaint:', error);
       return res.status(404).json({ 
         success: false, 
         message: 'Complaint not found' 
@@ -1052,14 +1044,14 @@ router.get('/:id', async (req, res) => {
     complaint.vote_count = voteCount;
     complaint.userVoted = userVoted;
 
-    console.log(` Found complaint: ${complaint.title} with ${voteCount} votes`);
+    console.log(`✅ Found complaint: ${complaint.title} with ${voteCount} votes`);
 
     res.json({
       success: true,
       complaint: complaint
     });
   } catch (error) {
-    console.error(' Get complaint error:', error);
+    console.error('❌ Get complaint error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -1087,7 +1079,7 @@ router.post('/vote', async (req, res) => {
     const { complaintId } = req.body;
     const userId = req.user.id;
 
-    console.log(` Processing toggle vote request:`, req.body);
+    console.log(`🗳️ Processing toggle vote request:`, req.body);
     
     if (!complaintId) {
       return res.status(400).json({ 
@@ -1104,7 +1096,7 @@ router.post('/vote', async (req, res) => {
       .single();
 
     if (complaintError || !complaint) {
-      console.error(' Complaint not found:', complaintError || 'No data returned');
+      console.error('❌ Complaint not found:', complaintError || 'No data returned');
       return res.status(404).json({ 
         success: false, 
         message: 'Complaint not found' 
@@ -1120,7 +1112,7 @@ router.post('/vote', async (req, res) => {
       .single();
 
     if (voteError && voteError.code !== 'PGRST116') { // PGRST116 = no rows returned
-      console.error(' Error checking existing vote:', voteError);
+      console.error('❌ Error checking existing vote:', voteError);
       return res.status(500).json({ 
         success: false, 
         message: 'Error checking vote status' 
@@ -1132,7 +1124,7 @@ router.post('/vote', async (req, res) => {
     // Process vote with simple upvote/downvote toggle logic
     if (!existingVote) {
       // User hasn't voted yet - add upvote
-      console.log(' Adding new upvote for user');
+      console.log('🗳️ Adding new upvote for user');
       const { data: newVote, error: insertError } = await supabase
         .from('complaint_votes')
         .insert([
@@ -1145,7 +1137,7 @@ router.post('/vote', async (req, res) => {
         .select();
 
       if (insertError) {
-        console.error(' Error adding vote:', insertError);
+        console.error('❌ Error adding vote:', insertError);
         return res.status(500).json({ 
           success: false, 
           message: 'Failed to add vote',
@@ -1155,13 +1147,13 @@ router.post('/vote', async (req, res) => {
 
       result = newVote[0];
       result.action = 'voted';
-      console.log(' Vote added successfully');
+      console.log('✅ Vote added successfully');
       
     } else {
       // User has already voted - toggle the vote
       if (existingVote.vote_type === 'upvote') {
         // Currently upvoted - DELETE the vote record completely (don't create downvote)
-        console.log(' Removing upvote (deleting vote record)');
+        console.log('🗳️ Removing upvote (deleting vote record)');
         const { error: deleteError } = await supabase
           .from('complaint_votes')
           .delete()
@@ -1169,7 +1161,7 @@ router.post('/vote', async (req, res) => {
           .eq('user_id', userId);
 
         if (deleteError) {
-          console.error(' Error deleting vote:', deleteError);
+          console.error('❌ Error deleting vote:', deleteError);
           return res.status(500).json({ 
             success: false, 
             message: 'Failed to remove vote',
@@ -1178,11 +1170,11 @@ router.post('/vote', async (req, res) => {
         }
 
         result = { vote_type: null, action: 'unvoted' };
-        console.log(' Vote deleted successfully');
+        console.log('✅ Vote deleted successfully');
         
       } else {
         // Currently has downvote or other vote type - change to upvote
-        console.log(' Changing to upvote');
+        console.log('🗳️ Changing to upvote');
         const { data: updatedVote, error: updateError } = await supabase
           .from('complaint_votes')
           .update({ 
@@ -1193,7 +1185,7 @@ router.post('/vote', async (req, res) => {
           .select();
 
         if (updateError) {
-          console.error(' Error updating to upvote:', updateError);
+          console.error('❌ Error updating to upvote:', updateError);
           return res.status(500).json({ 
             success: false, 
             message: 'Failed to add vote',
@@ -1203,7 +1195,7 @@ router.post('/vote', async (req, res) => {
 
         result = updatedVote[0];
         result.action = 'voted';
-        console.log(' Vote updated to upvote successfully');
+        console.log('✅ Vote updated to upvote successfully');
       }
     }
 
@@ -1232,7 +1224,7 @@ router.post('/vote', async (req, res) => {
     });
     
   } catch (error) {
-    console.error(' Vote processing error:', error);
+    console.error('❌ Vote processing error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while processing vote'
@@ -1278,7 +1270,7 @@ router.get('/vote/status', async (req, res) => {
       .eq('vote_type', 'upvote'); // Only consider upvotes
 
     if (error) {
-      console.error(' Error fetching vote status:', error);
+      console.error('❌ Error fetching vote status:', error);
       return res.status(500).json({ 
         success: false, 
         message: 'Error fetching vote status' 
@@ -1301,7 +1293,7 @@ router.get('/vote/status', async (req, res) => {
     });
     
   } catch (error) {
-    console.error(' Vote status error:', error);
+    console.error('❌ Vote status error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while getting vote status'
@@ -1323,7 +1315,7 @@ router.post('/create', async (req, res) => {
  */
 router.post('/calculate-priority', async (req, res) => {
   try {
-    console.log(' Pre-submission priority calculation request:', req.body);
+    console.log('🧮 Pre-submission priority calculation request:', req.body);
     
     const {
       category,
@@ -1382,5 +1374,3 @@ router.post('/calculate-priority', async (req, res) => {
 });
 
 module.exports = router;
-
-

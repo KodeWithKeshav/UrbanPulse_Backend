@@ -1,9 +1,9 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
 /**
- * Enhanced Multilingual Emotion Analysis Service for UrbanPulse
+ * Enhanced Multilingual Emotion Analysis Service for CivicStack
  * AI-powered with Hugging Face API + Smart Keyword Fallback
  */
 
@@ -18,10 +18,10 @@ class EmotionAnalysisService {
     // Enhanced multilingual keywords with extensive Tamil support
     this.emotionKeywords = {
       hi: { // Hindi
-        anger: ['', '', '', '', '', ''],
-        urgency: ['', '', '', '', '', '', '', '', '', ''],
-        frustration: ['', '', '', '', '', ''],
-        concern: ['', '', '', '', '', '']
+        anger: ['गुस्सा', 'क्रोध', 'नाराज़', 'परेशान', 'चिढ़', 'खफा'],
+        urgency: ['तुरंत', 'जल्दी', 'आपातकाल', 'खतरनाक', 'अभी', 'दुर्घटना', 'दुर्घटनाएं', 'मौत', 'मौतें', 'मृत्यु'],
+        frustration: ['परेशान', 'तंग', 'दुखी', 'चिंतित', 'हैरान', 'निराश'],
+        concern: ['चिंता', 'डर', 'फिक्र', 'घबराहट', 'बेचैनी', 'चिंतित']
       },
       en: { // English
         anger: ['angry', 'furious', 'mad', 'irritated', 'annoyed', 'frustrated'],
@@ -30,10 +30,10 @@ class EmotionAnalysisService {
         concern: ['worried', 'concerned', 'scared', 'afraid', 'anxious']
       },
       ta: { // Tamil - Comprehensive keywords
-        anger: ['', '', '', '', '', '', '', ''],
-        urgency: ['', '', '', '', '', '', '', '', '', '', ' '],
-        frustration: ['', '', '', '', '', '', '', ''],
-        concern: ['', '', '', '', '', '', '', '', '', '']
+        anger: ['கோபம்', 'எரிச்சல்', 'சீற்றம்', 'வெறுப்பு', 'கோபமாக', 'எரிச்சலாக', 'கோபப்படுகிறேன்', 'வெறுக்கிறேன்'],
+        urgency: ['அவசரம்', 'உடனடி', 'ஆபத்து', 'முக்கியம்', 'அவசரமாக', 'உடனடியாக', 'ஆபத்தான', 'அவசர', 'மரணம்', 'விபத்து', 'உயிருக்கு ஆபத்து'],
+        frustration: ['வருத்தம்', 'ஏமாற்றம்', 'வருத்தமாக', 'ஏமாற்றமாக', 'கஷ்டம்', 'துன்பம்', 'வேதனை', 'சோகம்'],
+        concern: ['கவலை', 'பயம்', 'கவலையாக', 'பயமாக', 'வேவலை', 'சிந்தனை', 'பரிவு', 'கவனம்', 'உளைச்சல்', 'நெருக்கடி']
       }
     };
   }
@@ -45,29 +45,29 @@ class EmotionAnalysisService {
     // Enhanced language detection based on Unicode ranges and common words
     const cleanText = text.trim();
     
-    // Tamil detection (Unicode range: U+0B80U+0BFF)
+    // Tamil detection (Unicode range: U+0B80–U+0BFF)
     const tamilChars = (cleanText.match(/[\u0B80-\u0BFF]/g) || []).length;
     if (tamilChars > 0) {
-      console.log(` Tamil characters detected: ${tamilChars} characters`);
+      console.log(`🔍 Tamil characters detected: ${tamilChars} characters`);
       return 'ta';
     }
     
-    // Hindi detection (Unicode range: U+0900U+097F) 
+    // Hindi detection (Unicode range: U+0900–U+097F) 
     const hindiChars = (cleanText.match(/[\u0900-\u097F]/g) || []).length;
     if (hindiChars > 0) {
-      console.log(` Hindi characters detected: ${hindiChars} characters`);
+      console.log(`🔍 Hindi characters detected: ${hindiChars} characters`);
       return 'hi';
     }
     
-    // Telugu detection (Unicode range: U+0C00U+0C7F)
+    // Telugu detection (Unicode range: U+0C00–U+0C7F)
     const teluguChars = (cleanText.match(/[\u0C00-\u0C7F]/g) || []).length;
     if (teluguChars > 0) {
-      console.log(` Telugu characters detected: ${teluguChars} characters`);
+      console.log(`🔍 Telugu characters detected: ${teluguChars} characters`);
       return 'te';
     }
     
     // Default to English
-    console.log(` No Indic scripts detected, defaulting to English`);
+    console.log(`🔍 No Indic scripts detected, defaulting to English`);
     return 'en';
   }
 
@@ -80,7 +80,7 @@ class EmotionAnalysisService {
         throw new Error('No Hugging Face API token');
       }
 
-      console.log(' Calling Hugging Face multilingual sentiment API...');
+      console.log('🤖 Calling Hugging Face multilingual sentiment API...');
       
       const response = await axios.post(
         this.config.apiUrl,
@@ -94,10 +94,10 @@ class EmotionAnalysisService {
         }
       );
 
-      console.log(' AI Response:', response.data);
+      console.log('✅ AI Response:', response.data);
       return this.convertSentimentToEmotions(response.data, text, language);
     } catch (error) {
-      console.error(' AI Analysis failed:', error.message);
+      console.error('❌ AI Analysis failed:', error.message);
       throw error;
     }
   }
@@ -111,11 +111,11 @@ class EmotionAnalysisService {
     if (Array.isArray(sentimentData) && sentimentData[0]) {
       const sentiment = sentimentData[0];
       
-      console.log(` AI Sentiment result: ${sentiment.label} (${sentiment.score.toFixed(3)})`);
+      console.log(`🎭 AI Sentiment result: ${sentiment.label} (${sentiment.score.toFixed(3)})`);
       
       // If confidence is too low (especially for Tamil), boost with keyword analysis
       if (sentiment.score < 0.3 && language === 'ta') {
-        console.log(' Low confidence AI result for Tamil, boosting with keywords');
+        console.log('⚠️ Low confidence AI result for Tamil, boosting with keywords');
         const keywordBoost = this.analyzeWithKeywords(text, language);
         
         // Merge AI and keyword results
@@ -153,9 +153,9 @@ class EmotionAnalysisService {
       // English
       'death', 'deaths', 'died', 'accident', 'accidents', 'emergency', 'urgent', 'critical', 'dangerous',
       // Hindi  
-      '', '', '', '', '', '', '', '',
+      'मौत', 'मौतें', 'मृत्यु', 'दुर्घटना', 'दुर्घटनाएं', 'आपातकाल', 'खतरनाक', 'गंभीर',
       // Tamil - Enhanced
-      '', '', '', '', '', '', '', '', ' '
+      'மரணம்', 'விபத்து', 'ஆபத்து', 'அவசரம்', 'உடனடி', 'அவசரமாக', 'உடனடியாக', 'ஆபத்தான', 'உயிருக்கு ஆபத்து'
     ];
 
     let urgencyScore = 0;
@@ -196,7 +196,7 @@ class EmotionAnalysisService {
     const emotions = { anger: 0, urgency: 0, frustration: 0, concern: 0 };
     const textLower = text.toLowerCase();
     
-    console.log(` Keyword analysis for language: ${language}`);
+    console.log(`🔍 Keyword analysis for language: ${language}`);
     
     Object.keys(emotions).forEach(emotion => {
       const emotionKeywords = keywords[emotion] || [];
@@ -207,7 +207,7 @@ class EmotionAnalysisService {
         if (textLower.includes(keyword.toLowerCase())) {
           score += 0.25;
           matchCount++;
-          console.log(` Found ${emotion} keyword: "${keyword}"`);
+          console.log(`✅ Found ${emotion} keyword: "${keyword}"`);
         }
       });
       
@@ -218,13 +218,13 @@ class EmotionAnalysisService {
     if (language === 'ta') {
       const hasContent = text.trim().length > 10;
       if (hasContent && Object.values(emotions).every(v => v === 0)) {
-        console.log(' No Tamil keywords matched, setting baseline concern');
+        console.log('🔧 No Tamil keywords matched, setting baseline concern');
         emotions.concern = 0.3; // Set minimum concern for Tamil complaints
         emotions.urgency = 0.2; // Set minimum urgency
       }
     }
 
-    console.log(` Keyword analysis result:`, emotions);
+    console.log(`📊 Keyword analysis result:`, emotions);
     return emotions;
   }
 
@@ -260,10 +260,10 @@ class EmotionAnalysisService {
    */
   async analyzeEmotion(text, category = null) {
     try {
-      console.log(' Starting emotion analysis:', text.substring(0, 50));
+      console.log('🧠 Starting emotion analysis:', text.substring(0, 50));
       
       const language = await this.detectLanguage(text);
-      console.log(` Detected language: ${language}`);
+      console.log(`📊 Detected language: ${language}`);
 
       let emotions = {};
       let analysisMethod = '';
@@ -273,9 +273,9 @@ class EmotionAnalysisService {
         try {
           emotions = await this.analyzeWithAI(text, language);
           analysisMethod = 'ai-powered';
-          console.log(' AI analysis successful');
+          console.log('✅ AI analysis successful');
         } catch (error) {
-          console.log(' AI failed, using keywords');
+          console.log('⚠️ AI failed, using keywords');
           emotions = this.analyzeWithKeywords(text, language);
           analysisMethod = 'keyword-fallback';
         }
@@ -287,7 +287,7 @@ class EmotionAnalysisService {
       const emotionScore = this.calculateEmotionScore(emotions);
       const adjustedScore = this.applyCategoryAdjustments(emotionScore, category);
 
-      console.log(' Analysis result:', { emotions, score: adjustedScore, method: analysisMethod });
+      console.log('🎯 Analysis result:', { emotions, score: adjustedScore, method: analysisMethod });
 
       return {
         success: true,
@@ -297,7 +297,7 @@ class EmotionAnalysisService {
         analysisMethod
       };
     } catch (error) {
-      console.error(' Analysis failed:', error);
+      console.error('❌ Analysis failed:', error);
       
       return {
         success: false,
@@ -334,7 +334,7 @@ router.post('/analyze', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error(' API Error:', error);
+    console.error('❌ API Error:', error);
     res.status(500).json({
       success: false,
       message: 'Emotion analysis failed',
@@ -346,8 +346,8 @@ router.post('/analyze', async (req, res) => {
 router.get('/test', async (req, res) => {
   const testCases = [
     { text: "The road has dangerous potholes and children fall down. Very worried about safety.", category: "pothole", language: "en" },
-    { text: "             ", category: "pothole", language: "hi" },
-    { text: "   .    .", category: "pothole", language: "ta" }
+    { text: "इस गड्ढे के कारण कई दुर्घटनाएं और मौतें हुई हैं कृपया इसे ठीक करें", category: "pothole", language: "hi" },
+    { text: "சாலையில் ஆபத்தான குழிகள் உள்ளன. நான் மிகவும் கவலையாக இருக்கிறேன்.", category: "pothole", language: "ta" }
   ];
 
   const results = [];
@@ -368,5 +368,3 @@ router.get('/test', async (req, res) => {
 });
 
 module.exports = router;
-
-

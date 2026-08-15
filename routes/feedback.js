@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 
@@ -9,15 +9,15 @@ const { supabase } = require('../config/supabase');
  */
 router.post('/submit', async (req, res) => {
   try {
-    console.log(' Processing feedback submission:', req.body);
+    console.log('📝 Processing feedback submission:', req.body);
     
     const { complaintId, rating, feedback, improvements, submittedAt } = req.body;
     
     // Validation
-    if (!rating) {
+    if (!complaintId || !rating) {
       return res.status(400).json({
         success: false,
-        message: 'Rating is required'
+        message: 'Missing required fields: complaintId and rating are required'
       });
     }
     
@@ -28,23 +28,24 @@ router.post('/submit', async (req, res) => {
       });
     }
     
-    // Check if complaint exists (only if complaintId is provided and not 'general')
-    let validComplaintId = null;
-    if (complaintId && complaintId !== 'general') {
-      const { data: complaint, error: complaintError } = await supabase
-        .from('complaints')
-        .select('id, title')
-        .eq('id', complaintId)
-        .single();
-        
-      if (!complaintError && complaint) {
-        validComplaintId = complaintId;
-      }
+    // Check if complaint exists
+    const { data: complaint, error: complaintError } = await supabase
+      .from('complaints')
+      .select('id, title')
+      .eq('id', complaintId)
+      .single();
+      
+    if (complaintError || !complaint) {
+      console.error('❌ Complaint not found:', complaintError);
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found'
+      });
     }
     
     // Prepare feedback data
     const feedbackData = {
-      complaint_id: validComplaintId,
+      complaint_id: complaintId,
       user_id: req.user?.id || null, // Authenticated user or null for guest
       rating: parseInt(rating),
       feedback_text: feedback || null,
@@ -60,22 +61,47 @@ router.post('/submit', async (req, res) => {
       .select();
       
     if (insertError) {
-      console.error(' Error inserting feedback:', insertError);
+      console.error('❌ Error inserting feedback:', insertError);
       
-      console.log(' Fallback: Faking successful feedback submission per user request');
-      return res.status(201).json({
-        success: true,
-        message: 'Feedback submitted successfully',
-        data: {
-          feedbackId: `fallback-${Date.now()}`,
-          complaintId: validComplaintId,
-          rating: rating,
-          submittedAt: feedbackData.submitted_at
+      // If table doesn't exist, create it
+      if (insertError.code === '42P01') {
+        console.log('📋 Creating complaint_feedback table...');
+        
+        const { error: createTableError } = await supabase.rpc('create_feedback_table', {});
+        
+        if (createTableError) {
+          console.error('❌ Error creating feedback table:', createTableError);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to create feedback table'
+          });
         }
-      });
+        
+        // Retry insertion
+        const { data: retryFeedback, error: retryError } = await supabase
+          .from('complaint_feedback')
+          .insert([feedbackData])
+          .select();
+          
+        if (retryError) {
+          console.error('❌ Error inserting feedback after table creation:', retryError);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to submit feedback'
+          });
+        }
+        
+        newFeedback = retryFeedback;
+      } else {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to submit feedback',
+          details: insertError.message
+        });
+      }
     }
     
-    console.log(' Feedback submitted successfully:', newFeedback?.[0]?.id);
+    console.log('✅ Feedback submitted successfully:', newFeedback?.[0]?.id);
     
     // Return success response
     return res.status(201).json({
@@ -90,7 +116,7 @@ router.post('/submit', async (req, res) => {
     });
     
   } catch (error) {
-    console.error(' Error processing feedback submission:', error);
+    console.error('❌ Error processing feedback submission:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while processing feedback'
@@ -104,7 +130,7 @@ router.post('/submit', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
-    console.log(' Getting feedback statistics...');
+    console.log('📊 Getting feedback statistics...');
     
     // Get overall statistics
     const { data: stats, error: statsError } = await supabase
@@ -112,7 +138,7 @@ router.get('/stats', async (req, res) => {
       .select('rating, created_at');
       
     if (statsError) {
-      console.error(' Error getting feedback stats:', statsError);
+      console.error('❌ Error getting feedback stats:', statsError);
       return res.status(500).json({
         success: false,
         message: 'Failed to retrieve feedback statistics'
@@ -148,7 +174,7 @@ router.get('/stats', async (req, res) => {
       recentFeedback: recentError ? [] : recentFeedback
     };
     
-    console.log(' Feedback statistics retrieved');
+    console.log('✅ Feedback statistics retrieved');
     
     return res.status(200).json({
       success: true,
@@ -156,7 +182,7 @@ router.get('/stats', async (req, res) => {
     });
     
   } catch (error) {
-    console.error(' Error getting feedback statistics:', error);
+    console.error('❌ Error getting feedback statistics:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while retrieving statistics'
@@ -165,4 +191,3 @@ router.get('/stats', async (req, res) => {
 });
 
 module.exports = router;
-

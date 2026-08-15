@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -49,8 +49,8 @@ router.post('/signup', validateSignup, async (req, res) => {
       });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // Hash password (10 rounds is secure and fast)
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user in Supabase
     const { data: user, error } = await supabase
