@@ -5,10 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "start:python": "cd python_services && ./venv/bin/python -m pip install -r requirements.txt && ./venv/bin/python distilbert_emotion_service.py & ./venv/bin/python gradcam_service.py",
-    "start:all": "concurrently \"npm start\" \"cd python_services && ./venv/bin/python distilbert_emotion_service.py\" \"cd python_services && ./venv/bin/python gradcam_service.py\"",
+    "start:python": "cd python_services && ./venv/bin/python -m pip install -r requirements.txt && ./venv/bin/python distilbert_emotion_service.py",
+    "start:all": "concurrently \"npm start\" \"cd python_services && ./venv/bin/python distilbert_emotion_service.py\"",
     "dev": "nodemon server.js",
-    "dev:all": "concurrently \"npm run dev\" \"cd python_services && ./venv/bin/python distilbert_emotion_service.py\" \"cd python_services && ./venv/bin/python gradcam_service.py\"",
+    "dev:all": "concurrently \"npm run dev\" \"cd python_services && ./venv/bin/python distilbert_emotion_service.py\"",
     "test": "jest"
   },
   "keywords": [

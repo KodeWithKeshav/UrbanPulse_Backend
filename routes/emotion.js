@@ -567,7 +567,9 @@ class EmotionAnalysisService {
         category = this.detectIssueCategory(text);
       }
 
-      let emotions = {};
+      // null (not {}) so the `!emotions` fallback checks below correctly trigger
+      // when checkLocalModel() is false and this variable is never reassigned.
+      let emotions = null;
       let analysisMethod = '';
 
       // For Tamil/Hindi text, use enhanced keyword analysis + English translation if available

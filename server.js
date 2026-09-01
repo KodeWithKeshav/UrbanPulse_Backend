@@ -104,7 +104,6 @@ app.use('/api/emotion', require('./routes/emotion'));
 app.use('/api/simplified-votes', require('./routes/simplified-votes'));
 app.use('/api/guest-votes', require('./routes/guest-votes'));
 app.use('/api/feedback', require('./routes/feedback'));
-app.use('/api/gradcam', require('./routes/gradcam'));
 app.use('/api/weather', require('./routes/weather'));
 
 // Health check
