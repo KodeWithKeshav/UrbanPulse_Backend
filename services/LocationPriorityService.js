@@ -314,23 +314,6 @@ class LocationPriorityService {
   }
 
   /**
-   * Legacy method - now calls the new dynamic method
-   */
-  calculateSearchRadius(locationMeta) {
-    // This is now handled by the async version above
-    // Keeping for backward compatibility
-    const baseRadius = {
-      exact: 1000,    // Exact coordinates - 1km search radius
-      street: 1500,   // Street level - 1.5km search radius  
-      area: 2000,     // Area level - 2km search radius
-      unknown: 1500   // Default to street level (1.5km)
-    };
-
-    const privacyLevel = locationMeta.privacyLevel || 'unknown';
-    return baseRadius[privacyLevel] || baseRadius.unknown;
-  }
-
-  /**
    * Get privacy level adjustment factor for scoring
    */
   getPrivacyLevelAdjustment(privacyLevel) {
@@ -349,10 +332,25 @@ class LocationPriorityService {
    */
   async analyzeFacilities(latitude, longitude, searchRadius = 1500) {
     const results = {};
-    
+    // Once a project-level config error (bad key, billing, quota) shows up for one
+    // facility type, it will be identical for every other type - stop calling out.
+    let placesApiUnavailable = null;
+
     console.log(`🔍 Starting facility analysis for ${latitude}, ${longitude} with ${searchRadius}m radius`);
-    
+
     for (const [facilityType, config] of Object.entries(this.facilityConfig)) {
+      if (placesApiUnavailable) {
+        results[facilityType] = {
+          count: 0,
+          facilities: [],
+          score: 0,
+          weight: config.weight,
+          error: placesApiUnavailable,
+          description: config.description
+        };
+        continue;
+      }
+
       try {
         // Use dynamic search radius, but respect facility-specific limits
         let effectiveRadius = Math.min(searchRadius, config.radius);
@@ -404,10 +402,13 @@ class LocationPriorityService {
         
       } catch (error) {
         console.error(`⚠️ Error analyzing ${facilityType}:`, error.message);
-        results[facilityType] = { 
-          count: 0, 
-          facilities: [], 
-          score: 0, 
+        if (error.retryable === false) {
+          placesApiUnavailable = error.message;
+        }
+        results[facilityType] = {
+          count: 0,
+          facilities: [],
+          score: 0,
           weight: config.weight,
           error: error.message,
           description: config.description
@@ -426,7 +427,7 @@ class LocationPriorityService {
    */
   async searchFacilitiesWithRetry(latitude, longitude, types, radius, maxRetries = 2) {
     let lastError;
-    
+
     for (const searchType of types) {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -436,13 +437,18 @@ class LocationPriorityService {
           }
         } catch (error) {
           lastError = error;
+          // Permanent, project-level errors (bad/missing key, billing, quota) will
+          // fail identically on every retry - don't burn time looping on them.
+          if (error.retryable === false) {
+            throw error;
+          }
           if (attempt < maxRetries) {
             await this.delay(1000 * (attempt + 1)); // Exponential backoff
           }
         }
       }
     }
-    
+
     if (lastError) throw lastError;
     return [];
   }
@@ -452,7 +458,9 @@ class LocationPriorityService {
    */
   async queryGooglePlaces(latitude, longitude, type, radius) {
     if (!this.apiKey) {
-      throw new Error('Google Places API key not configured');
+      const error = new Error('Google Places API key not configured');
+      error.retryable = false; // missing config will never succeed on retry
+      throw error;
     }
 
     const response = await axios.get(`${this.baseUrl}/nearbysearch/json`, {
@@ -467,9 +475,11 @@ class LocationPriorityService {
 
     if (response.data.status === 'OVER_QUERY_LIMIT') {
       console.error('❌ Google Places API: Quota exceeded');
-      throw new Error('API quota exceeded');
+      const error = new Error('API quota exceeded');
+      error.retryable = false; // quota won't reset within a retry window
+      throw error;
     }
-    
+
     if (response.data.status === 'REQUEST_DENIED') {
       console.error('❌ Google Places API: Request denied');
       console.error('   Reason:', response.data.error_message || 'No error message');
@@ -477,12 +487,16 @@ class LocationPriorityService {
       console.error('   1. API key restrictions (check allowed IPs/referrers in Google Cloud Console)');
       console.error('   2. Places API not enabled in Google Cloud Console');
       console.error('   3. Billing not set up for the project');
-      throw new Error('API request denied - check API key restrictions');
+      const error = new Error('API request denied - check API key restrictions');
+      error.retryable = false; // a project-level config error, not a transient failure
+      throw error;
     }
 
     if (response.data.status === 'INVALID_REQUEST') {
       console.error('❌ Google Places API: Invalid request');
-      throw new Error('Invalid API request parameters');
+      const error = new Error('Invalid API request parameters');
+      error.retryable = false; // malformed params won't fix themselves on retry
+      throw error;
     }
 
     if (!response.data.results) {
