@@ -132,15 +132,13 @@ function calculateCategoryStats(complaints) {
   
   // Convert to array with readable names
   const categoryNames = {
-    'pothole': 'Road Damage',
-    'broken_streetlight': 'Streetlights',
-    'garbage_collection': 'Garbage',
-    'water_leakage': 'Water Issues',
-    'sewage_overflow': 'Sewage',
-    'traffic_signal': 'Traffic',
-    'electrical_danger': 'Power',
-    'noise_complaint': 'Noise',
-    'illegal_parking': 'Parking',
+    'pothole': 'Potholes',
+    'fallen_tree': 'Fallen Trees',
+    'garbage_dumping': 'Garbage Dumping',
+    'stray_cattle': 'Stray Cattle',
+    'fallen_electric_pole': 'Fallen Electric Poles',
+    'concrete_structure_damage': 'Structural Damage',
+    'road_waterlogging': 'Road Waterlogging',
     'others': 'Others'
   };
   

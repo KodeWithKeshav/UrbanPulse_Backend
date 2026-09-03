@@ -739,24 +739,33 @@ class LocationPriorityService {
         school: 1.2,
         transit_station: 1.4
       },
-      'sewage_overflow': {
-        hospital: 1.5,
-        school: 1.4,
-        pharmacy: 1.3
+      'fallen_tree': {
+        transit_station: 1.3,
+        school: 1.2
       },
-      'streetlight': {
-        school: 1.2,
-        police: 1.3,
-        transit_station: 1.2
-      },
-      'water_leakage': {
-        hospital: 1.3,
-        government: 1.2
-      },
-      'garbage_dump': {
+      'garbage_dumping': {
         hospital: 1.4,
         school: 1.3,
         pharmacy: 1.2
+      },
+      'stray_cattle': {
+        school: 1.3,
+        transit_station: 1.2
+      },
+      'fallen_electric_pole': {
+        hospital: 1.5,
+        school: 1.4,
+        police: 1.3
+      },
+      'concrete_structure_damage': {
+        hospital: 1.4,
+        school: 1.3,
+        government: 1.2
+      },
+      'road_waterlogging': {
+        hospital: 1.5,
+        school: 1.4,
+        pharmacy: 1.3
       },
       'others': {
         hospital: 1.1,

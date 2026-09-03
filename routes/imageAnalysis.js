@@ -54,13 +54,16 @@ router.get('/test-connection', async (req, res) => {
 
 /**
  * POST /validate-image
- * Body: { imageUrl: string }
+ * Body: { imageUrl: string, category?: string }
  * Runs the CityZen SAM3 workflow and returns whether the image shows a
- * recognized civic issue.
+ * recognized civic issue. When `category` (the issue type the citizen
+ * already selected) is provided, the photo must actually show that issue —
+ * a photo of a different civic issue is rejected (allowUpload: false,
+ * categoryMatch: false) rather than silently accepted.
  */
 router.post('/validate-image', async (req, res) => {
     try {
-        const { image, imageUrl } = req.body;
+        const { image, imageUrl, category } = req.body;
 
         if (!imageUrl) {
             if (image) {
@@ -79,12 +82,13 @@ router.post('/validate-image', async (req, res) => {
             });
         }
 
-        const result = await validateImageWithRoboflow(imageUrl);
+        const result = await validateImageWithRoboflow(imageUrl, category);
         return res.json({
             success: result.success,
             confidence: result.confidence,
             modelConfidence: result.modelConfidence,
             allowUpload: result.allowUpload,
+            categoryMatch: result.categoryMatch,
             message: result.message,
             detections: result.detections,
             primaryClass: result.primaryClass,

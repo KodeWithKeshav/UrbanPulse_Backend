@@ -96,7 +96,9 @@ async function runCityZenWorkflow(image, parameters) {
 
 /**
  * Validate an already-hosted image (e.g. a Cloudinary URL) against the
- * CityZen SAM3 workflow and decide whether it shows a real civic issue.
+ * CityZen SAM3 workflow and decide whether it shows a real civic issue —
+ * and, when the citizen has already picked an issue category, whether the
+ * photo actually shows *that* issue.
  *
  * The workflow itself applies per-class confidence thresholds and a
  * water-scene gate before returning any detection, so a non-empty
@@ -104,8 +106,11 @@ async function runCityZenWorkflow(image, parameters) {
  * on top of it.
  *
  * @param {string} imageUrl - https URL of the image to validate
+ * @param {string} [expectedCategory] - the issue category the citizen
+ *   already selected. When provided (and not "others"), the photo must
+ *   contain a detection of this class or `allowUpload` is false.
  */
-async function validateImageWithRoboflow(imageUrl) {
+async function validateImageWithRoboflow(imageUrl, expectedCategory) {
     try {
         const result = await runCityZenWorkflow({ type: 'url', value: imageUrl });
         const detections = Array.isArray(result.detections) ? result.detections : [];
@@ -116,6 +121,7 @@ async function validateImageWithRoboflow(imageUrl) {
                 confidence: 0,
                 modelConfidence: 0,
                 allowUpload: false,
+                categoryMatch: false,
                 message: 'No valid civic issue detected in image.',
                 detections: [],
                 primaryClass: null,
@@ -125,14 +131,46 @@ async function validateImageWithRoboflow(imageUrl) {
         const primary = detections.reduce((best, d) =>
             (d.confidence ?? 0) > (best.confidence ?? 0) ? d : best
         );
-        const confidence = primary.confidence ?? 0;
         const label = CIVIC_ISSUE_LABELS[primary.class] || primary.class;
+
+        const needsCategoryCheck = expectedCategory && expectedCategory !== 'others' && CIVIC_ISSUE_LABELS[expectedCategory];
+
+        if (needsCategoryCheck) {
+            const matchingDetection = detections.find((d) => d.class === expectedCategory);
+
+            if (!matchingDetection) {
+                const expectedLabel = CIVIC_ISSUE_LABELS[expectedCategory] || expectedCategory;
+                return {
+                    success: true,
+                    confidence: primary.confidence ?? 0,
+                    modelConfidence: primary.confidence ?? 0,
+                    allowUpload: false,
+                    categoryMatch: false,
+                    message: `This photo looks like "${label}", but you selected "${expectedLabel}". Upload a photo that actually shows the selected issue, or go back and change the issue type.`,
+                    detections,
+                    primaryClass: primary.class,
+                };
+            }
+
+            const matchConfidence = matchingDetection.confidence ?? 0;
+            return {
+                success: true,
+                confidence: matchConfidence,
+                modelConfidence: matchConfidence,
+                allowUpload: true,
+                categoryMatch: true,
+                message: `Detected Issue: ${CIVIC_ISSUE_LABELS[expectedCategory]}`,
+                detections,
+                primaryClass: expectedCategory,
+            };
+        }
 
         return {
             success: true,
-            confidence,
-            modelConfidence: confidence,
+            confidence: primary.confidence ?? 0,
+            modelConfidence: primary.confidence ?? 0,
             allowUpload: true,
+            categoryMatch: null,
             message: `Detected Issue: ${label}`,
             detections,
             primaryClass: primary.class,
@@ -144,6 +182,7 @@ async function validateImageWithRoboflow(imageUrl) {
             confidence: 0,
             modelConfidence: 0,
             allowUpload: false,
+            categoryMatch: null,
             message: error.message || 'Image validation failed',
             detections: [],
             primaryClass: null,

@@ -2,9 +2,62 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 const LocationPriorityService = require('../services/LocationPriorityService');
+const { emotionService } = require('../services/EmotionAnalysisService');
+const { analyzeTextAuthenticity } = require('../services/TextAuthenticityService');
 
 // Initialize services
 const locationPriorityService = new LocationPriorityService();
+
+/**
+ * Run sentiment/emotion analysis and authenticity/correctness checks on a
+ * complaint description together, so both the pre-submit check and the
+ * final submission use one source of truth.
+ */
+async function analyzeComplaintText({ description, category, imagePrimaryClass, translation }) {
+  const [emotionResult, authenticity] = await Promise.all([
+    emotionService.analyzeEmotion(description, category, translation),
+    Promise.resolve(analyzeTextAuthenticity({ text: description, category, imagePrimaryClass })),
+  ]);
+
+  return { emotion: emotionResult, authenticity };
+}
+
+/**
+ * POST /api/complaints/analyze-text
+ * Lets the client run sentiment + authenticity/correctness checks on a
+ * description before final submission, so the UI can warn the citizen if
+ * their text doesn't seem to match the selected/detected issue category
+ * (e.g. category is "pothole" but the description is about something else)
+ * or reads like spam/gibberish.
+ */
+router.post('/analyze-text', async (req, res) => {
+  try {
+    const { description, category, imagePrimaryClass, translation } = req.body;
+
+    if (!description || !description.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'description is required',
+        code: 'MISSING_DESCRIPTION'
+      });
+    }
+
+    const result = await analyzeComplaintText({ description, category, imagePrimaryClass, translation });
+
+    res.json({
+      success: true,
+      emotion: result.emotion,
+      authenticity: result.authenticity,
+    });
+  } catch (error) {
+    console.error('❌ Text analysis error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze complaint text',
+      details: error.message
+    });
+  }
+});
 
 /**
  * Submit a new complaint with automatic location processing
@@ -51,7 +104,7 @@ async function filterComplaintDataForInsertion(complaintData, availableColumns) 
   
   // Validate numeric fields to prevent overflow errors
   // For columns with precision 3, scale 2 (max value < 10)
-  const numericFields = ['priority_score', 'location_sensitivity_score', 'emotion_score', 'ai_confidence_score'];
+  const numericFields = ['priority_score', 'location_sensitivity_score', 'emotion_score', 'ai_confidence_score', 'text_authenticity_score'];
   numericFields.forEach(field => {
     if (field in filteredData) {
       // Ensure value is a number between 0 and 9.99
@@ -105,6 +158,52 @@ router.post('/submit', async (req, res) => {
       });
     }
     
+    // Reject outright if an image was uploaded but never passed validation
+    // against the selected category (client should already prevent this,
+    // but the server is the authority — never trust the client alone).
+    if (imageUrl) {
+      if (!imageValidation || imageValidation.allowUpload !== true) {
+        return res.status(400).json({
+          success: false,
+          error: imageValidation?.message || 'The uploaded photo does not match the selected issue type.',
+          code: 'IMAGE_CATEGORY_MISMATCH',
+          categoryMatch: imageValidation?.categoryMatch ?? false,
+          detectedClass: imageValidation?.primaryClass || null,
+        });
+      }
+    }
+
+    // Analyze the description: sentiment/emotion + authenticity/correctness
+    // (does the text actually describe the declared/detected issue, and does
+    // it read like a genuine report rather than spam/gibberish?)
+    const textAnalysis = await analyzeComplaintText({
+      description,
+      category,
+      imagePrimaryClass: imageValidation?.primaryClass || null,
+    });
+    console.log('🔎 Text analysis result:', {
+      authenticityScore: textAnalysis.authenticity.authenticityScore,
+      flagged: textAnalysis.authenticity.flagged,
+      mismatchDetected: textAnalysis.authenticity.mismatchDetected,
+      emotionScore: textAnalysis.emotion.emotionScore,
+    });
+
+    // Reject outright if the description doesn't genuinely match the
+    // selected/detected issue (or reads like spam/gibberish) — no
+    // "submit anyway" path. The citizen must fix the text or the category.
+    if (textAnalysis.authenticity.flagged) {
+      return res.status(400).json({
+        success: false,
+        error: 'The description does not appear to match the selected issue type.',
+        code: 'DESCRIPTION_CATEGORY_MISMATCH',
+        contentAnalysis: {
+          authenticityScore: textAnalysis.authenticity.authenticityScore,
+          reasons: textAnalysis.authenticity.reasons,
+          suggestedCategory: textAnalysis.authenticity.suggestedCategory,
+        },
+      });
+    }
+
     // Calculate comprehensive priority score
     const priorityAnalysis = await calculateComprehensivePriority({
       imageValidation,
@@ -112,7 +211,7 @@ router.post('/submit', async (req, res) => {
       category,
       description
     });
-    
+
     // Generate a proper UUID for demo users or use the provided userId if it's in UUID format
     const generateUuid = () => {
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -273,18 +372,26 @@ router.post('/submit', async (req, res) => {
       // For numeric fields with precision 3, scale 2, values must be < 10^1 (i.e., < 10)
       priority_score: parseFloat((priorityAnalysis.totalScore).toFixed(2)),
       location_sensitivity_score: parseFloat((priorityAnalysis.locationScore).toFixed(2)),
-      emotion_score: imageValidation?.confidence ? parseFloat((imageValidation.confidence).toFixed(2)) : 0.5,
-      
+      emotion_score: parseFloat((textAnalysis.emotion.emotionScore ?? 0.5).toFixed(2)),
+
       // Add AI confidence score if available
-      ai_confidence_score: imageValidation?.modelConfidence ? 
+      ai_confidence_score: imageValidation?.modelConfidence ?
         parseFloat((imageValidation.modelConfidence).toFixed(2)) : 0.5,
-      
+
+      // How well the description matches the declared/detected category and
+      // reads like a genuine report (0-1, see TextAuthenticityService)
+      text_authenticity_score: textAnalysis.authenticity.authenticityScore,
+      content_flagged: textAnalysis.authenticity.flagged,
+      content_flag_reason: textAnalysis.authenticity.reasons.join(' ') || null,
+
       // Images and media
       image_urls: imageUrl ? [imageUrl] : [],
       audio_url: null,
-      
+
       // Status fields
-      verification_status: imageValidation?.allowUpload ? 'verified' : 'unverified',
+      verification_status: textAnalysis.authenticity.flagged
+        ? 'flagged'
+        : (imageValidation?.allowUpload ? 'verified' : 'unverified'),
       assigned_department: null,
       assigned_admin_id: null,
       resolution_notes: null,
@@ -414,6 +521,14 @@ router.post('/submit', async (req, res) => {
         privacyLevel: locationData.privacyLevel,
         accuracy: locationData.accuracy ? `±${locationData.accuracy}m` : 'Unknown',
         description: locationData.description
+      },
+      contentAnalysis: {
+        authenticityScore: textAnalysis.authenticity.authenticityScore,
+        flagged: textAnalysis.authenticity.flagged,
+        mismatchDetected: textAnalysis.authenticity.mismatchDetected,
+        suggestedCategory: textAnalysis.authenticity.suggestedCategory,
+        reasons: textAnalysis.authenticity.reasons,
+        emotionScore: textAnalysis.emotion.emotionScore,
       },
       nextSteps: generateNextSteps(finalPriorityLevel, category),
     };
@@ -610,7 +725,15 @@ function getFallbackPriority(category) {
     'stray_animals': 0.4,
     'noise_pollution': 0.4,
     'air_pollution': 0.7,
-    'other': 0.5
+    // CityZen SAM3 workflow classes
+    'fallen_tree': 0.55,
+    'garbage_dumping': 0.6,
+    'stray_cattle': 0.45,
+    'fallen_electric_pole': 0.9,
+    'concrete_structure_damage': 0.75,
+    'road_waterlogging': 0.85,
+    'other': 0.5,
+    'others': 0.5
   };
   
   return categoryPriorities[category] || 0.5;
@@ -636,7 +759,15 @@ function getCategoryImportance(category) {
     'stray_animals': 'standard',
     'noise_pollution': 'standard',
     'air_pollution': 'high-priority',
-    'other': 'standard'
+    // CityZen SAM3 workflow classes
+    'fallen_tree': 'medium-priority',
+    'garbage_dumping': 'medium-priority',
+    'stray_cattle': 'standard',
+    'fallen_electric_pole': 'critical',
+    'concrete_structure_damage': 'high-priority',
+    'road_waterlogging': 'critical',
+    'other': 'standard',
+    'others': 'standard'
   };
   
   return categoryImportance[category] || 'standard';
