@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const LocationPriorityService = require('../services/LocationPriorityService');
+const priorityConfig = require('../services/priorityConfig');
 
 // Initialize the location priority service
 const locationPriorityService = new LocationPriorityService();
@@ -286,10 +287,16 @@ router.get('/info', (req, res) => {
         color: '#FFAA00'
       },
       LOW: {
-        range: '0.0-0.4',
+        range: '0.2-0.4',
         description: 'Lower priority - routine maintenance',
         responseTime: '< 1 week',
         color: '#888888'
+      },
+      MINIMAL: {
+        range: '0.0-0.2',
+        description: 'Minimal priority - schedule as resources permit',
+        responseTime: 'best effort',
+        color: '#CCCCCC'
       }
     },
     apiLimits: {
@@ -515,13 +522,13 @@ function validateCalculationInput(input) {
 }
 
 /**
- * Determine priority level based on numerical score
+ * Determine priority level based on numerical score. Delegates to
+ * services/priorityConfig.js so this file, LocationPriorityService, and
+ * routes/complaints.js all use the exact same thresholds (previously this
+ * used a different 4-band scale than LocationPriorityService's 5-band one).
  */
 function determinePriorityLevel(score) {
-  if (score >= 0.8) return 'CRITICAL';
-  if (score >= 0.6) return 'HIGH';
-  if (score >= 0.4) return 'MEDIUM';
-  return 'LOW';
+  return priorityConfig.getPriorityLevel(score);
 }
 
 /**

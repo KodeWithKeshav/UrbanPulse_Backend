@@ -1,4 +1,4 @@
-// CivicStack Chatbot Knowledge Base
+// CityZen Chatbot Knowledge Base
 // Comprehensive information about app features, civic issues, and user guidance
 
 const CIVIC_KNOWLEDGE_BASE = {
@@ -7,7 +7,7 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['features', 'what can', 'how to use', 'navigate', 'app overview', 'main features'],
     responses: [
       {
-        text: "**CivicStack Main Features:**\n\n**Submit Complaints** - Report civic issues with AI validation\n**Interactive Map** - View all complaints on a live map\n**Feed View** - Instagram-style feed of nearby issues\n**Voting System** - Upvote important complaints\n**Priority Scoring** - AI-powered urgency assessment\n**Voice Input** - Multi-language speech recognition\n**Smart Location** - Privacy-aware location capture\n**Image Validation** - AI verifies civic issues\n**Personal Reports** - Track your submissions\n**Transparency** - Public accountability features",
+        text: "**CityZen Main Features:**\n\n**Submit Complaints** - Report civic issues with AI validation\n**Interactive Map** - View all complaints on a live map\n**Feed View** - Instagram-style feed of nearby issues\n**Voting System** - Upvote important complaints\n**Priority Scoring** - AI-powered urgency assessment\n**Voice Input** - Multi-language speech recognition\n**Smart Location** - Privacy-aware location capture\n**Image Validation** - AI verifies civic issues\n**Personal Reports** - Track your submissions\n**Transparency** - Public accountability features",
         confidence: 0.95,
         category: 'app_overview',
         suggestedActions: [
@@ -40,7 +40,7 @@ const CIVIC_KNOWLEDGE_BASE = {
     keywords: ['pothole', 'pot hole', 'road hole', 'road damage', 'broken road', 'street damage', 'pavement damage'],
     responses: [
       {
-        text: "**Reporting Potholes:**\n\n**Step-by-Step:**\n1. Open CivicStack app\n2. Tap 'Submit Complaint'\n3. Select 'Pothole' category\n4. Take clear photo showing the hole\n5. Add description (voice input available)\n6. Confirm location is accurate\n7. Submit - gets routed to road dept!\n\n**Pro Tips:**\n• Photo from multiple angles\n• Include size reference (coin, shoe)\n• Mention traffic impact\n• Use voice input in your language\n• Vote on similar nearby potholes\n\n**Priority Factors:**\n• Size and depth\n• Traffic volume\n• Near schools/hospitals\n• Community votes",
+        text: "**Reporting Potholes:**\n\n**Step-by-Step:**\n1. Open CityZen app\n2. Tap 'Submit Complaint'\n3. Select 'Pothole' category\n4. Take clear photo showing the hole\n5. Add description (voice input available)\n6. Confirm location is accurate\n7. Submit - gets routed to road dept!\n\n**Pro Tips:**\n• Photo from multiple angles\n• Include size reference (coin, shoe)\n• Mention traffic impact\n• Use voice input in your language\n• Vote on similar nearby potholes\n\n**Priority Factors:**\n• Size and depth\n• Traffic volume\n• Near schools/hospitals\n• Community votes",
         confidence: 0.95,
         category: 'pothole_guide',
         suggestedActions: [
@@ -265,7 +265,7 @@ class ChatbotKnowledgeMatcher {
 
     if (isGreeting) {
       return {
-        text: "👋 Hello! I'm your CivicStack Assistant. I can help you with:\n\n📝 Submitting complaints\n🗺️ Using the map\n👍 Voting system\n🎤 Voice input\n📸 Image validation\n🔧 Troubleshooting\n\nWhat would you like to know?",
+        text: "👋 Hello! I'm your CityZen Assistant. I can help you with:\n\n📝 Submitting complaints\n🗺️ Using the map\n👍 Voting system\n🎤 Voice input\n📸 Image validation\n🔧 Troubleshooting\n\nWhat would you like to know?",
         confidence: 0.8,
         category: 'greeting',
         suggestedActions: [

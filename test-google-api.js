@@ -24,6 +24,44 @@ async function testGooglePlacesAPI() {
     console.log(`\n📍 Testing location: ${testLocation.name} (${testLocation.latitude}, ${testLocation.longitude})`);
     
     try {
+        console.log('\n🌐 Testing Places API (New) [places:searchNearby]...');
+        const newApiRes = await axios.post(
+            'https://places.googleapis.com/v1/places:searchNearby',
+            {
+                includedTypes: ['hospital'],
+                maxResultCount: 5,
+                locationRestriction: {
+                    circle: {
+                        center: { latitude: testLocation.latitude, longitude: testLocation.longitude },
+                        radius: 1000.0
+                    }
+                }
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': apiKey,
+                    'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating'
+                },
+                timeout: 10000
+            }
+        );
+        console.log(`✅ Places API (New) Status: ${newApiRes.status}`);
+        const places = newApiRes.data?.places || [];
+        console.log(`📍 Places Found: ${places.length}`);
+        if (places.length > 0) {
+            console.log('\nTop hospitals found:');
+            places.slice(0, 3).forEach((p, i) => {
+                console.log(`${i + 1}. ${p.displayName?.text} (${p.formattedAddress})`);
+            });
+        }
+        return;
+    } catch (newErr) {
+        console.warn('⚠️ Places API (New) failed:', newErr.response?.data?.error?.message || newErr.message);
+        console.log('Falling back to testing legacy nearbysearch...');
+    }
+
+    try {
         const url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
         const params = {
             location: `${testLocation.latitude},${testLocation.longitude}`,
@@ -32,7 +70,7 @@ async function testGooglePlacesAPI() {
             key: apiKey
         };
         
-        console.log('\n🌐 Making API request...');
+        console.log('\n🌐 Making API request to legacy nearbysearch...');
         const response = await axios.get(url, { params, timeout: 10000 });
         
         console.log(`\n✅ Status Code: ${response.status}`);

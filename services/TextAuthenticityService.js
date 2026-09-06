@@ -12,7 +12,12 @@
  * text-classification service deployed. It runs synchronously and cheaply
  * enough to call on every keystroke-debounce from the client as well as on
  * final submission server-side.
+ *
+ * The category-match/text-quality blend weight is defined in
+ * services/priorityConfig.js (AHP-derived, with cited rationale).
  */
+
+const priorityConfig = require('./priorityConfig');
 
 // Keyword sets per CityZen SAM3 civic-issue class (English + common Hindi/
 // Tamil terms). "others" is intentionally left empty — free-form issues
@@ -274,8 +279,16 @@ function analyzeTextAuthenticity({ text, category, imagePrimaryClass } = {}) {
     categoryMatchScore = Math.min(categoryMatchScore, 0.3);
   }
 
+  // Blend weights are AHP-derived (services/priorityConfig.js
+  // AUTHENTICITY_WEIGHTS: categoryMatch ~0.636, textQuality ~0.364) from a
+  // documented criticality judgment -- category mismatch is the stronger
+  // signal of a fabricated/misfiled report, text quality a weaker one. This
+  // independently-elicited split landed within 0.01 of the original
+  // hand-picked 0.65/0.35, which is why it is effectively unchanged here,
+  // now with a citable rationale instead of none.
   const authenticityScore = Math.max(0, Math.min(1,
-    (categoryMatchScore * 0.65) + (qualityScore * 0.35)
+    (categoryMatchScore * priorityConfig.AUTHENTICITY_WEIGHTS.categoryMatch) +
+    (qualityScore * priorityConfig.AUTHENTICITY_WEIGHTS.textQuality)
   ));
 
   // Flag for admin review when the combined score is low enough that this

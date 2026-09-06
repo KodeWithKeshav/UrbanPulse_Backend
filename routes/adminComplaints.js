@@ -235,30 +235,52 @@ router.get('/:id', async (req, res) => {
     console.log(`📋 Admin fetching complaint details for ID: ${id}`);
     
     const supabase = req.app.get('supabase');
-    const { data, error } = await supabase
+    let data;
+    const { data: cWithUser, error: cErr } = await supabase
       .from('complaints')
-      .select('*')
+      .select(`
+        *,
+        users:user_id (id, full_name, email, phone_number)
+      `)
       .eq('id', id)
       .single();
-    
-    if (error) {
-      console.error('❌ Error fetching complaint details:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to fetch complaint details',
-        details: error.message
-      });
+
+    if (cErr || !cWithUser) {
+      const { data: cBasic, error: basicErr } = await supabase
+        .from('complaints')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (basicErr || !cBasic) {
+        console.error('❌ Error fetching complaint details:', cErr || basicErr);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to fetch complaint details',
+          details: (cErr || basicErr)?.message
+        });
+      }
+      data = cBasic;
+    } else {
+      data = cWithUser;
     }
-    
-    if (!data) {
-      return res.status(404).json({
-        success: false,
-        error: 'Complaint not found'
-      });
+
+    if (!data.users && data.user_id) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id, full_name, email, phone_number')
+        .eq('id', data.user_id)
+        .single();
+      if (u) data.users = u;
     }
-    
-    console.log(`✅ Fetched details for complaint ${id}`);
-    
+
+    const regName = data.users?.full_name || data.user_name || 'Verified Citizen';
+    data.users = data.users || { full_name: regName, email: data.users?.email };
+    data.user = data.users;
+    data.user_name = regName;
+    data.citizenName = regName;
+
+    console.log(`✅ Fetched details for complaint ${id} (registered by: ${regName})`);
+
     res.json({
       success: true,
       data

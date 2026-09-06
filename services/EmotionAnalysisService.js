@@ -1,4 +1,5 @@
 const axios = require('axios');
+const priorityConfig = require('./priorityConfig');
 
 /**
  * Enhanced Multilingual Emotion Analysis Service for CivicStack
@@ -6,6 +7,10 @@ const axios = require('axios');
  *
  * Extracted from routes/emotion.js so routes/complaints.js can reuse the
  * same analysis (instead of duplicating logic or making a self HTTP call).
+ *
+ * The urgency/anger/concern/frustration weights and the per-category
+ * multiplier are both defined in services/priorityConfig.js (AHP-derived,
+ * with cited rationale) -- see that file and PRIORITY_ENGINE_REPORT.pdf.
  */
 class EmotionAnalysisService {
   constructor() {
@@ -213,15 +218,21 @@ class EmotionAnalysisService {
         const urgencyBoost = this.detectUrgencyFromText(text);
         emotions.urgency = urgencyBoost;
 
-        // For non-English languages (Tamil, Hindi), AI often misclassifies complaints as positive
-        // Set baseline concerns for civic complaints in these languages
+        // For non-English languages (Tamil, Hindi), general-purpose sentiment
+        // models are known to misclassify negative/urgent civic complaints as
+        // "positive" (a documented low-resource-language limitation). We
+        // correct for that by re-scoring with the language-specific keyword
+        // detector and keeping the max of the two -- but WITHOUT an
+        // unconditional numeric floor: if neither the sentiment model nor
+        // the keyword detector finds any urgency/concern signal in the
+        // actual text, the score stays at 0 rather than being manufactured.
+        // (A prior version forced a minimum 0.3 concern / 0.2 urgency on
+        // every non-English "positive" complaint regardless of content,
+        // which systematically inflated priority for ordinary non-urgent
+        // complaints in these languages -- a fairness/accuracy bug, not a
+        // justified correction.)
         const language = this.detectLanguage(text);
         if (language === 'ta' || language === 'hi') {
-          console.log(`🔧 Adjusting positive sentiment for ${language} civic complaint`);
-          emotions.concern = Math.max(0.3, urgencyBoost); // Minimum 30% concern
-          emotions.urgency = Math.max(0.2, urgencyBoost); // Minimum 20% urgency
-
-          // Check for specific issue indicators
           const keywordEmotions = this.analyzeWithKeywords(text, language);
           Object.keys(emotions).forEach(emotion => {
             emotions[emotion] = Math.max(emotions[emotion], keywordEmotions[emotion]);
@@ -384,16 +395,17 @@ class EmotionAnalysisService {
       emotions[emotion] = Math.min(score, 1.0);
     });
 
-    // For non-English, if no keywords matched but text exists, set a minimum baseline
-    if (language === 'ta' || language === 'hi' || language === 'te') {
-      const hasContent = text.trim().length > 10;
-      if (hasContent && Object.values(emotions).every(v => v === 0)) {
-        console.log(`🔧 No ${language} keywords matched, setting baseline for civic complaint`);
-        emotions.concern = 0.40;
-        emotions.urgency = 0.35;
-        emotions.frustration = 0.15;
-      }
-    }
+    // NOTE: a prior version of this function set a fixed minimum score
+    // (concern=0.40, urgency=0.35, frustration=0.15) for ANY non-English
+    // text whose keywords didn't match, regardless of what the text
+    // actually said -- manufacturing an emotion score from zero evidence.
+    // That systematically inflated priority for ordinary non-English
+    // complaints and is removed. If this keyword pass finds nothing,
+    // analyzeWithEnhancedKeywords()'s broader detectUrgencyFromText/
+    // detectConcernFromText/etc. calls (which have their own Hindi/Tamil
+    // coverage) and analyzeEmotion()'s translation-merge path (re-running
+    // English keyword analysis on a provided translation) are the
+    // legitimate ways more signal gets found -- not a hardcoded floor.
 
     console.log(`📊 Keyword analysis result:`, emotions);
     return emotions;
@@ -403,7 +415,7 @@ class EmotionAnalysisService {
    * Calculate final emotion score with enhanced safety detection
    */
   calculateEmotionScore(emotions) {
-    const weights = { urgency: 0.4, anger: 0.3, concern: 0.2, frustration: 0.1 };
+    const weights = priorityConfig.EMOTION_WEIGHTS; // AHP-derived, see priorityConfig.js
 
     let baseScore = Object.keys(emotions).reduce((score, emotion) => {
       return score + (emotions[emotion] * (weights[emotion] || 0));
@@ -418,71 +430,21 @@ class EmotionAnalysisService {
   }
 
   /**
-   * Apply category adjustments with comprehensive civic issue priorities
+   * Apply category adjustments with comprehensive civic issue priorities.
+   *
+   * Previously this held ~30 independently hand-picked multipliers (1.0x-
+   * 1.9x), several for category names that could never actually occur here
+   * (this app's real complaint taxonomy has 8 classes -- see
+   * services/imageAnalysisService.js CIVIC_ISSUE_LABELS). Replaced with a
+   * shared, documented 6-tier lookup (services/priorityConfig.js) so the
+   * *ranking logic* (why a gas leak outranks a pothole) is auditable
+   * instead of 30 separate unexplained numbers, and so this multiplier
+   * agrees with the same category tiers used for the fallback priority
+   * score in routes/complaints.js.
    */
   applyCategoryAdjustments(score, category) {
-    const categoryMultipliers = {
-      // CRITICAL HEALTH HAZARDS (High Priority) - 1.7-1.9x
-      'sewage_overflow': 1.8,     // Health emergency - disease spread
-      'water_contamination': 1.8, // Disease outbreak
-      'gas_leak': 1.9,           // Life threatening
-      'fire_hazard': 1.8,        // Life threatening
-      'electrical_danger': 1.7,   // Electrocution risk
-      'health_emergency': 1.8,    // Medical emergencies
-      'disease_outbreak': 1.9,    // Public health crisis
-
-      // PUBLIC SAFETY ISSUES (High Priority) - 1.5-1.8x
-      'women_safety': 1.7,        // Gender safety concerns
-      'night_safety': 1.6,        // Evening/night security
-      'broken_streetlight': 1.6,  // Crime prevention
-      'road_safety': 1.7,         // Accident prevention
-      'public_safety': 1.8,       // General safety
-      'traffic_signal': 1.5,      // Accident risk
-      'child_safety': 1.7,        // Vulnerable group protection
-
-      // INFRASTRUCTURE FAILURES (Medium-High Priority) - 1.3-1.5x
-      'pothole': 1.4,             // Vehicle damage, accidents
-      'road_damage': 1.4,         // Traffic disruption
-      'water_logging': 1.5,       // Mobility, health
-      'road_waterlogging': 1.5,   // Mobility, health (CityZen SAM3 class)
-      'drain_blockage': 1.4,      // Flooding risk
-      'bridge_damage': 1.5,       // Public infrastructure
-      'concrete_structure_damage': 1.6, // Public infrastructure (CityZen SAM3 class)
-      'building_collapse': 1.8,    // Life threatening
-      'fallen_tree': 1.4,         // Blocks roads, safety risk (CityZen SAM3 class)
-      'fallen_electric_pole': 1.9, // Electrocution risk (CityZen SAM3 class)
-
-      // BASIC SERVICES (Medium Priority) - 1.3-1.5x
-      'garbage_collection': 1.3,   // Health, hygiene
-      'garbage_dumping': 1.3,      // Health, hygiene (CityZen SAM3 class)
-      'stray_cattle': 1.3,        // Road safety hazard (CityZen SAM3 class)
-      'water_supply': 1.5,        // Basic necessity
-      'power_outage': 1.3,        // Daily life impact
-      'sanitation': 1.4,          // Public health
-      'public_transport': 1.3,    // Mobility
-
-      // ENVIRONMENTAL ISSUES (Medium Priority) - 1.2-1.4x
-      'air_pollution': 1.4,       // Health impact
-      'noise_pollution': 1.2,     // Quality of life
-      'water_pollution': 1.5,     // Health critical
-      'illegal_dumping': 1.3,     // Environmental health
-      'tree_cutting': 1.2,        // Environmental concern
-
-      // CIVIC AMENITIES (Lower Priority) - 1.1-1.2x
-      'park_maintenance': 1.1,    // Quality of life
-      'street_cleaning': 1.2,     // Aesthetics, hygiene
-      'public_toilet': 1.3,       // Basic facility
-      'sports_facility': 1.1,     // Recreation
-
-      // ADMINISTRATIVE (Lowest Priority) - 1.0-1.1x
-      'document_issue': 1.0,      // Bureaucratic
-      'tax_related': 1.0,         // Administrative
-      'information_request': 1.0, // Query
-      'general': 1.0              // Default
-    };
-
-    const multiplier = categoryMultipliers[category] || 1.0;
-    console.log(`🏷️ Category "${category}" multiplier: ${multiplier}x`);
+    const multiplier = priorityConfig.getCategoryMultiplier(category);
+    console.log(`🏷️ Category "${category}" (tier: ${priorityConfig.getCategoryTier(category)}) multiplier: ${multiplier.toFixed(3)}x`);
     return Math.min(score * multiplier, 1.0);
   }
 
@@ -689,26 +651,17 @@ class EmotionAnalysisService {
     const frustrationBoost = this.detectFrustrationFromText(text);
     emotions.frustration = Math.max(emotions.frustration, frustrationBoost);
 
-    // Civic complaint minimum floor: any substantive text describing an issue
-    // should get at least a baseline score
-    const textLen = text.trim().length;
-    if (textLen > 15) {
-      const totalScore = emotions.urgency + emotions.concern + emotions.anger + emotions.frustration;
-      if (totalScore < 0.6) {
-        // For non-English languages, keyword coverage is spotty so apply a stronger floor
-        if (language === 'ta' || language === 'hi' || language === 'te') {
-          emotions.concern = Math.max(emotions.concern, 0.40);
-          emotions.urgency = Math.max(emotions.urgency, 0.35);
-          emotions.frustration = Math.max(emotions.frustration, 0.20);
-          console.log('🔧 Applied non-English civic complaint minimum floor');
-        } else if (totalScore < 0.3) {
-          // English text with very low score
-          emotions.concern = Math.max(emotions.concern, 0.25);
-          emotions.urgency = Math.max(emotions.urgency, 0.15);
-          console.log('🔧 Applied civic complaint minimum floor');
-        }
-      }
-    }
+    // NOTE: a prior version of this function additionally forced a minimum
+    // total emotion score onto any "low scoring" complaint (a stronger,
+    // second floor for non-English text stacked on top of the one already
+    // removed from analyzeWithKeywords() above), regardless of what the
+    // keyword/boost detectors above actually found. Removed for the same
+    // reason: a genuinely low-urgency complaint should score low -- that is
+    // the correct, accurate output, not a bug to patch over. Emotion is
+    // only priorityConfig.TOP_LEVEL_WEIGHTS.emotionScore (~14%) of the
+    // final priority score, by design (see priorityConfig.js section 2), so
+    // a low emotion reading does not suppress a genuinely severe complaint
+    // that the infrastructure/image signals already caught.
 
     console.log('🔍 Enhanced keyword analysis complete:', emotions);
     return emotions;

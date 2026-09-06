@@ -4,6 +4,9 @@ const {
     explainImageUrl,
     CIVIC_ISSUE_LABELS,
 } = require('../services/imageAnalysisService');
+const { estimateAndPersistGeometry } = require('../services/potholeGeometryService');
+const { geometryColumnsAvailable, GEOMETRY_PLACEHOLDER } = require('../services/schemaAvailability');
+const { supabase } = require('../config/supabase');
 const router = express.Router();
 
 // Route to get the civic issue categories the CityZen SAM3 workflow can detect
@@ -113,12 +116,26 @@ router.post('/validate-image', async (req, res) => {
  */
 router.post('/explain', async (req, res) => {
     try {
-        const { imageUrl } = req.body;
+        const { imageUrl, category, complaintId } = req.body;
         if (!imageUrl) {
             return res.status(400).json({ success: false, error: 'imageUrl is required' });
         }
 
-        const result = await explainImageUrl(imageUrl);
+        let effectiveCategory = category;
+        if (!effectiveCategory && complaintId) {
+            try {
+                const { data } = await supabase
+                    .from('complaints')
+                    .select('category')
+                    .eq('id', complaintId)
+                    .single();
+                if (data?.category) effectiveCategory = data.category;
+            } catch (err) {
+                console.warn('Category lookup failed:', err.message);
+            }
+        }
+
+        const result = await explainImageUrl(imageUrl, effectiveCategory);
         res.json({
             success: true,
             annotatedImage: { type: 'base64', value: result.annotatedImageBase64 },
@@ -131,6 +148,53 @@ router.post('/explain', async (req, res) => {
             success: false,
             error: error.message
         });
+    }
+});
+
+/**
+ * POST /estimate-geometry
+ * Body: { complaintId: string, imageUrl: string, category?: string, primaryClass?: string, deviceTilt?: number }
+ * (Re-)runs pothole footprint/depth estimation for a complaint and persists
+ * the result. Used by the admin UI to retry after a `geometry_status:
+ * 'failed'` result, or to re-estimate once a real device tilt is
+ * available. See services/potholeGeometryService.js.
+ */
+router.post('/estimate-geometry', async (req, res) => {
+    try {
+        const { complaintId, imageUrl, category, primaryClass, deviceTilt } = req.body;
+        if (!complaintId || !imageUrl) {
+            return res.status(400).json({ success: false, error: 'complaintId and imageUrl are required' });
+        }
+
+        // The geometry columns (database/add_pothole_geometry_columns.sql)
+        // may not be migrated onto this Supabase project yet - there's
+        // nowhere to persist a result, so skip the (Roboflow-calling, non-
+        // free) estimation work entirely and say so plainly rather than
+        // failing on the SELECT below with a raw Postgres error.
+        if (!(await geometryColumnsAvailable(supabase))) {
+            return res.json({
+                success: true,
+                geometry: { id: complaintId, ...GEOMETRY_PLACEHOLDER },
+                message: 'Pothole geometry columns are not migrated on this database yet - see database/add_pothole_geometry_columns.sql. Estimation was skipped.',
+            });
+        }
+
+        await estimateAndPersistGeometry({ complaintId, imageUrl, category, primaryClass, deviceTilt });
+
+        const { data, error } = await supabase
+            .from('complaints')
+            .select('id, estimated_width_cm, estimated_length_cm, estimated_area_cm2, estimated_depth_cm, geometry_confidence, geometry_method, geometry_assumptions, geometry_status, geometry_error, geometry_computed_at')
+            .eq('id', complaintId)
+            .single();
+
+        if (error) {
+            return res.status(500).json({ success: false, error: error.message });
+        }
+
+        res.json({ success: true, geometry: data });
+    } catch (error) {
+        console.error('Geometry estimation endpoint error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

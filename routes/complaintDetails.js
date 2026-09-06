@@ -35,6 +35,21 @@ router.get('/:id', async (req, res) => {
       });
     }
 
+    if (!complaint.users && complaint.user_id) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .eq('id', complaint.user_id)
+        .single();
+      if (u) complaint.users = u;
+    }
+
+    const citizenFullName = complaint.users?.full_name || complaint.user_name || 'Verified Citizen';
+    complaint.users = complaint.users || { full_name: citizenFullName, email: complaint.users?.email };
+    complaint.user = complaint.users;
+    complaint.user_name = citizenFullName;
+    complaint.citizenName = citizenFullName;
+
     // Check if current user has voted for this complaint
     let userVoted = false;
     if (userId) {

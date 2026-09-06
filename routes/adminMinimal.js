@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { geometryColumnsAvailable, GEOMETRY_PLACEHOLDER } = require('../services/schemaAvailability');
 
 // Test endpoint
 router.get('/test', (req, res) => {
@@ -75,10 +76,18 @@ router.get('/complaints/priority-queue', async (req, res) => {
 
     console.log('🔍 Fetching complaints for priority queue with filters:', { search, location, category, status });
 
+    // Pothole geometry columns (database/add_pothole_geometry_columns.sql)
+    // may not have been migrated onto this Supabase project yet - probe
+    // first rather than hard-failing the whole queue with a Postgres
+    // "column does not exist" error over a handful of optional fields.
+    const geometryReady = await geometryColumnsAvailable(supabase);
+    const baseColumns = 'id, title, description, category, status, priority_score, location_address, created_at, user_id';
+    const geometryColumns = 'estimated_width_cm, estimated_length_cm, estimated_area_cm2, estimated_depth_cm, geometry_confidence, geometry_status';
+
     // First get ALL complaints without joins to avoid schema issues
     let complaintsQuery = supabase
       .from('complaints')
-      .select('id, title, description, category, status, priority_score, location_address, created_at, user_id');
+      .select(geometryReady ? `${baseColumns}, ${geometryColumns}` : baseColumns);
 
     // Add search functionality
     if (search && search.trim()) {
@@ -109,7 +118,7 @@ router.get('/complaints/priority-queue', async (req, res) => {
       complaintsQuery = complaintsQuery.limit(parseInt(limit));
     }
 
-    const { data: complaints, error: complaintsError } = await complaintsQuery;
+    let { data: complaints, error: complaintsError } = await complaintsQuery;
 
     if (complaintsError) {
       console.error('Complaints query error:', complaintsError);
@@ -119,7 +128,15 @@ router.get('/complaints/priority-queue', async (req, res) => {
       });
     }
 
-    console.log(`📋 Found ${complaints?.length || 0} complaints`);
+    // Keep the response shape identical either way - pothole geometry
+    // fields just come back null (renders as "no estimate" in the admin
+    // UI, same as a complaint geometry estimation hasn't finished for)
+    // until the migration is applied.
+    if (!geometryReady && complaints) {
+      complaints = complaints.map(c => ({ ...c, ...GEOMETRY_PLACEHOLDER }));
+    }
+
+    console.log(`📋 Found ${complaints?.length || 0} complaints${geometryReady ? '' : ' (geometry columns not migrated yet - using placeholders)'}`);
 
     // Get unique user IDs
     const userIds = [...new Set(complaints?.map(c => c.user_id).filter(Boolean))];
@@ -148,9 +165,13 @@ router.get('/complaints/priority-queue', async (req, res) => {
     // Transform data to include user name
     const transformedComplaints = complaints?.map(complaint => {
       const user = usersData[complaint.user_id];
+      const name = user?.full_name || user?.email || 'Verified Citizen';
       return {
         ...complaint,
-        user_name: user?.full_name || user?.email || 'Unknown User',
+        users: user || { full_name: name, email: user?.email },
+        user: user || { full_name: name, email: user?.email },
+        user_name: name,
+        citizenName: name,
         user_email: user?.email,
         user_phone: user?.phone_number
       };
@@ -530,20 +551,49 @@ router.get('/complaints/:complaintId/details', async (req, res) => {
 
     console.log('🔍 Fetching complaint details for ID:', complaintId);
 
-    // Get complaint details
-    const { data: complaint, error } = await supabase
+    // Get complaint details with user
+    let complaint;
+    const { data: cWithUser, error: cErr } = await supabase
       .from('complaints')
-      .select('*')
+      .select(`
+        *,
+        users:user_id (id, full_name, email, phone_number)
+      `)
       .eq('id', complaintId)
       .single();
 
-    if (error) {
-      console.error('Complaint details error:', error);
-      return res.status(404).json({
-        success: false,
-        message: 'Complaint not found'
-      });
+    if (cErr || !cWithUser) {
+      const { data: cBasic, error: basicErr } = await supabase
+        .from('complaints')
+        .select('*')
+        .eq('id', complaintId)
+        .single();
+      if (basicErr || !cBasic) {
+        console.error('Complaint details error:', cErr || basicErr);
+        return res.status(404).json({
+          success: false,
+          message: 'Complaint not found'
+        });
+      }
+      complaint = cBasic;
+    } else {
+      complaint = cWithUser;
     }
+
+    if (!complaint.users && complaint.user_id) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id, full_name, email, phone_number')
+        .eq('id', complaint.user_id)
+        .single();
+      if (u) complaint.users = u;
+    }
+
+    const registeredName = complaint.users?.full_name || complaint.user_name || 'Verified Citizen';
+    complaint.users = complaint.users || { full_name: registeredName, email: complaint.users?.email };
+    complaint.user = complaint.users;
+    complaint.user_name = registeredName;
+    complaint.citizenName = registeredName;
 
     // Get REAL workflow data from complaint_workflow table
     const { data: workflow, error: workflowError } = await supabase
