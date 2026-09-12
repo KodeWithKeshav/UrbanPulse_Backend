@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 const { authenticateUser, authorizeUserType } = require('../middleware/auth');
@@ -34,6 +34,21 @@ router.get('/:id', async (req, res) => {
         message: 'Complaint not found' 
       });
     }
+
+    if (!complaint.users && complaint.user_id) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .eq('id', complaint.user_id)
+        .single();
+      if (u) complaint.users = u;
+    }
+
+    const citizenFullName = complaint.users?.full_name || complaint.user_name || 'Verified Citizen';
+    complaint.users = complaint.users || { full_name: citizenFullName, email: complaint.users?.email };
+    complaint.user = complaint.users;
+    complaint.user_name = citizenFullName;
+    complaint.citizenName = citizenFullName;
 
     // Check if current user has voted for this complaint
     let userVoted = false;
@@ -144,7 +159,7 @@ router.get('/:id', async (req, res) => {
       complaint: completeComplaint 
     });
   } catch (error) {
-    console.error(' Error in complaint details API:', error);
+    console.error('❌ Error in complaint details API:', error);
     return res.status(500).json({ 
       success: false, 
       message: 'Server error', 
@@ -248,7 +263,7 @@ router.post('/vote', authenticateUser, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error(' Error in vote API:', error);
+    console.error('❌ Error in vote API:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error',
@@ -399,7 +414,7 @@ router.get('/nearby', async (req, res) => {
       complaints: completeComplaints
     });
   } catch (error) {
-    console.error(' Error in nearby complaints API:', error);
+    console.error('❌ Error in nearby complaints API:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error',
@@ -579,4 +594,3 @@ router.get('/:id/progress', async (req, res) => {
 });
 
 module.exports = router;
-

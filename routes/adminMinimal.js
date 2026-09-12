@@ -1,5 +1,6 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
+const { geometryColumnsAvailable, GEOMETRY_PLACEHOLDER } = require('../services/schemaAvailability');
 
 // Test endpoint
 router.get('/test', (req, res) => {
@@ -34,7 +35,7 @@ router.get('/dashboard/overview', async (req, res) => {
     const pendingComplaints = complaints?.filter(c => c.status === 'pending').length || 0;
     const inProgressComplaints = complaints?.filter(c => c.status === 'in_progress').length || 0;
 
-    console.log(' Dashboard stats:', {
+    console.log('📊 Dashboard stats:', {
       total: totalComplaints,
       pending: pendingComplaints,
       inProgress: inProgressComplaints,
@@ -73,12 +74,20 @@ router.get('/complaints/priority-queue', async (req, res) => {
     const { limit, page = 1, search, location, category, status } = req.query;
     const supabase = req.app.get('supabase');
 
-    console.log(' Fetching complaints for priority queue with filters:', { search, location, category, status });
+    console.log('🔍 Fetching complaints for priority queue with filters:', { search, location, category, status });
+
+    // Pothole geometry columns (database/add_pothole_geometry_columns.sql)
+    // may not have been migrated onto this Supabase project yet - probe
+    // first rather than hard-failing the whole queue with a Postgres
+    // "column does not exist" error over a handful of optional fields.
+    const geometryReady = await geometryColumnsAvailable(supabase);
+    const baseColumns = 'id, title, description, category, status, priority_score, location_address, created_at, user_id';
+    const geometryColumns = 'estimated_width_cm, estimated_length_cm, estimated_area_cm2, estimated_depth_cm, geometry_confidence, geometry_status';
 
     // First get ALL complaints without joins to avoid schema issues
     let complaintsQuery = supabase
       .from('complaints')
-      .select('id, title, description, category, status, priority_score, location_address, created_at, user_id');
+      .select(geometryReady ? `${baseColumns}, ${geometryColumns}` : baseColumns);
 
     // Add search functionality
     if (search && search.trim()) {
@@ -109,7 +118,7 @@ router.get('/complaints/priority-queue', async (req, res) => {
       complaintsQuery = complaintsQuery.limit(parseInt(limit));
     }
 
-    const { data: complaints, error: complaintsError } = await complaintsQuery;
+    let { data: complaints, error: complaintsError } = await complaintsQuery;
 
     if (complaintsError) {
       console.error('Complaints query error:', complaintsError);
@@ -119,11 +128,19 @@ router.get('/complaints/priority-queue', async (req, res) => {
       });
     }
 
-    console.log(` Found ${complaints?.length || 0} complaints`);
+    // Keep the response shape identical either way - pothole geometry
+    // fields just come back null (renders as "no estimate" in the admin
+    // UI, same as a complaint geometry estimation hasn't finished for)
+    // until the migration is applied.
+    if (!geometryReady && complaints) {
+      complaints = complaints.map(c => ({ ...c, ...GEOMETRY_PLACEHOLDER }));
+    }
+
+    console.log(`📋 Found ${complaints?.length || 0} complaints${geometryReady ? '' : ' (geometry columns not migrated yet - using placeholders)'}`);
 
     // Get unique user IDs
     const userIds = [...new Set(complaints?.map(c => c.user_id).filter(Boolean))];
-    console.log(` Need to fetch ${userIds.length} unique users`);
+    console.log(`👥 Need to fetch ${userIds.length} unique users`);
 
     // Fetch user details separately
     let usersData = {};
@@ -141,22 +158,26 @@ router.get('/complaints/priority-queue', async (req, res) => {
         users?.forEach(user => {
           usersData[user.id] = user;
         });
-        console.log(` Successfully fetched ${users?.length || 0} user records`);
+        console.log(`✅ Successfully fetched ${users?.length || 0} user records`);
       }
     }
 
     // Transform data to include user name
     const transformedComplaints = complaints?.map(complaint => {
       const user = usersData[complaint.user_id];
+      const name = user?.full_name || user?.email || 'Verified Citizen';
       return {
         ...complaint,
-        user_name: user?.full_name || user?.email || 'Unknown User',
+        users: user || { full_name: name, email: user?.email },
+        user: user || { full_name: name, email: user?.email },
+        user_name: name,
+        citizenName: name,
         user_email: user?.email,
         user_phone: user?.phone_number
       };
     }) || [];
 
-    console.log(' Priority queue response ready');
+    console.log('✅ Priority queue response ready');
 
     res.json({
       success: true,
@@ -186,7 +207,7 @@ router.get('/citizens', async (req, res) => {
     const { limit, search, sort = 'recent' } = req.query;
     const supabase = req.app.get('supabase');
 
-    console.log(' Citizens endpoint called with params:', { limit, search, sort });
+    console.log('📊 Citizens endpoint called with params:', { limit, search, sort });
 
     // Build query for users
     let query = supabase
@@ -214,7 +235,7 @@ router.get('/citizens', async (req, res) => {
 
     const { data: users, error: usersError } = await query;
 
-    console.log(' Users query result:', { users: users?.length, error: usersError?.message });
+    console.log('📊 Users query result:', { users: users?.length, error: usersError?.message });
 
     if (usersError) {
       console.error('Citizens query error:', usersError);
@@ -265,7 +286,7 @@ router.get('/citizens', async (req, res) => {
       };
     }) || [];
 
-    console.log(' Sending citizens response with count:', citizens.length);
+    console.log('📊 Sending citizens response with count:', citizens.length);
 
     res.json({
       success: true,
@@ -296,7 +317,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
     const { citizenId } = req.params;
     const supabase = req.app.get('supabase');
 
-    console.log(' Getting citizen details for ID:', citizenId);
+    console.log('🔍 Getting citizen details for ID:', citizenId);
 
     // Get citizen details
     const { data: citizen, error: citizenError } = await supabase
@@ -358,7 +379,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
           status: 'completed',
           date: complaint.created_at,
           description: 'Your complaint has been received and is being reviewed',
-          icon: ''
+          icon: '📝'
         },
         {
           id: 2,
@@ -367,7 +388,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
                  workflow?.step_1_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_1_timestamp,
           description: 'Our team is reviewing your complaint for validity and priority',
-          icon: '',
+          icon: '🔍',
           officer: workflow?.step_1_officer_id ? 'Assigned to officer' : null
         },
         {
@@ -377,7 +398,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
                  workflow?.step_2_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_2_timestamp,
           description: 'Field assessment and resource planning in progress',
-          icon: '',
+          icon: '📋',
           officer: workflow?.step_2_officer_id ? 'Officer assigned' : null,
           estimatedCost: workflow?.step_2_estimated_cost
         },
@@ -388,7 +409,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
                  workflow?.step_3_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_3_timestamp,
           description: 'Resolution work is being carried out',
-          icon: '',
+          icon: '🔧',
           contractor: workflow?.step_3_contractor_id ? 'Contractor assigned' : null,
           startDate: workflow?.step_3_start_date
         },
@@ -398,7 +419,7 @@ router.get('/citizens/:citizenId/details', async (req, res) => {
           status: complaint.status === 'resolved' ? 'completed' : 'pending',
           date: workflow?.step_3_completion_date || (complaint.status === 'resolved' ? complaint.updated_at : null),
           description: complaint.status === 'resolved' ? 'Issue has been resolved successfully' : 'Awaiting completion',
-          icon: complaint.status === 'resolved' ? '' : '',
+          icon: complaint.status === 'resolved' ? '✅' : '⏳',
           photos: workflow?.step_3_completion_photos
         }
       ];
@@ -444,7 +465,7 @@ router.delete('/citizens/:citizenId', async (req, res) => {
     const { citizenId } = req.params;
     const supabase = req.app.get('supabase');
 
-    console.log(' Deleting citizen and all associated data for ID:', citizenId);
+    console.log('🗑️ Deleting citizen and all associated data for ID:', citizenId);
 
     // Start transaction-like operations (delete in reverse dependency order)
     
@@ -506,7 +527,7 @@ router.delete('/citizens/:citizenId', async (req, res) => {
       });
     }
 
-    console.log(' Successfully deleted citizen and all associated data');
+    console.log('✅ Successfully deleted citizen and all associated data');
 
     res.json({
       success: true,
@@ -528,22 +549,51 @@ router.get('/complaints/:complaintId/details', async (req, res) => {
     const { complaintId } = req.params;
     const supabase = req.app.get('supabase');
 
-    console.log(' Fetching complaint details for ID:', complaintId);
+    console.log('🔍 Fetching complaint details for ID:', complaintId);
 
-    // Get complaint details
-    const { data: complaint, error } = await supabase
+    // Get complaint details with user
+    let complaint;
+    const { data: cWithUser, error: cErr } = await supabase
       .from('complaints')
-      .select('*')
+      .select(`
+        *,
+        users:user_id (id, full_name, email, phone_number)
+      `)
       .eq('id', complaintId)
       .single();
 
-    if (error) {
-      console.error('Complaint details error:', error);
-      return res.status(404).json({
-        success: false,
-        message: 'Complaint not found'
-      });
+    if (cErr || !cWithUser) {
+      const { data: cBasic, error: basicErr } = await supabase
+        .from('complaints')
+        .select('*')
+        .eq('id', complaintId)
+        .single();
+      if (basicErr || !cBasic) {
+        console.error('Complaint details error:', cErr || basicErr);
+        return res.status(404).json({
+          success: false,
+          message: 'Complaint not found'
+        });
+      }
+      complaint = cBasic;
+    } else {
+      complaint = cWithUser;
     }
+
+    if (!complaint.users && complaint.user_id) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id, full_name, email, phone_number')
+        .eq('id', complaint.user_id)
+        .single();
+      if (u) complaint.users = u;
+    }
+
+    const registeredName = complaint.users?.full_name || complaint.user_name || 'Verified Citizen';
+    complaint.users = complaint.users || { full_name: registeredName, email: complaint.users?.email };
+    complaint.user = complaint.users;
+    complaint.user_name = registeredName;
+    complaint.citizenName = registeredName;
 
     // Get REAL workflow data from complaint_workflow table
     const { data: workflow, error: workflowError } = await supabase
@@ -626,7 +676,7 @@ router.get('/complaints/:complaintId/details', async (req, res) => {
       workflow_template: 'standard_civic_complaint'
     };
 
-    console.log(' Complaint details with REAL workflow loaded successfully');
+    console.log('✅ Complaint details with REAL workflow loaded successfully');
 
     res.json({
       success: true,
@@ -652,7 +702,7 @@ router.put('/complaints/:complaintId/stage/:stageId', async (req, res) => {
     // Frontend sends stage_status, so use that if status is not provided
     const actualStatus = status || stage_status;
 
-    console.log(' Updating REAL workflow stage:', { 
+    console.log('🔄 Updating REAL workflow stage:', { 
       complaintId, 
       stageId, 
       status: actualStatus,
@@ -794,7 +844,7 @@ router.put('/complaints/:complaintId/stage/:stageId', async (req, res) => {
       console.warn('Failed to log update:', logError.message);
     }
 
-    console.log(' REAL workflow stage updated successfully');
+    console.log('✅ REAL workflow stage updated successfully');
 
     res.json({
       success: true,
@@ -828,7 +878,7 @@ router.post('/complaints/:complaintId/stage/next', async (req, res) => {
     const { complaintId } = req.params;
     const supabase = req.app.get('supabase');
 
-    console.log(' Adding next stage to complaint:', complaintId);
+    console.log('➕ Adding next stage to complaint:', complaintId);
 
     // For now, just move the complaint to the next status
     const { data: complaint, error: fetchError } = await supabase
@@ -883,7 +933,7 @@ router.post('/complaints/:complaintId/stage/next', async (req, res) => {
         });
       }
 
-      console.log(' Stage progressed successfully');
+      console.log('✅ Stage progressed successfully');
 
       res.json({
         success: true,
@@ -914,7 +964,7 @@ router.put('/complaints/:complaintId/status', async (req, res) => {
     const { status } = req.body;
     const supabase = req.app.get('supabase');
 
-    console.log(' Updating complaint status:', { complaintId, status });
+    console.log('🔄 Updating complaint status:', { complaintId, status });
 
     // Update complaint status
     const { data: updatedComplaint, error } = await supabase
@@ -1009,4 +1059,3 @@ router.get('/contractors', (req, res) => {
 });
 
 module.exports = router;
-

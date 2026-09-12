@@ -1,0 +1,6 @@
+# Core web framework
+flask==3.1.0
+flask-cors==5.0.1
+
+# HuggingFace (emotion service)
+huggingface_hub

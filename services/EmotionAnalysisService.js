@@ -1,320 +1,753 @@
-﻿// UrbanPulse Chatbot Knowledge Base
-// Comprehensive information about app features, civic issues, and user guidance
+const axios = require('axios');
+const priorityConfig = require('./priorityConfig');
 
-const CIVIC_KNOWLEDGE_BASE = {
- // App Features and Navigation
- app_features: {
- keywords: ['features', 'what can', 'how to use', 'navigate', 'app overview', 'main features'],
- responses: [
- {
- text: "**UrbanPulse Main Features:**\n\n**Submit Complaints** - Report civic issues with AI validation\n**Interactive Map** - View all complaints on a live map\n**Feed View** - Instagram-style feed of nearby issues\n**Voting System** - Upvote important complaints\n**Priority Scoring** - AI-powered urgency assessment\n**Voice Input** - Multi-language speech recognition\n**Smart Location** - Privacy-aware location capture\n**Image Validation** - AI verifies civic issues\n**Personal Reports** - Track your submissions\n**Transparency** - Public accountability features",
- confidence: 0.95,
- category: 'app_overview',
- suggestedActions: [
- { type: 'submit_complaint', label: 'Submit Complaint' },
- { type: 'view_map', label: 'View Map' },
- { type: 'view_feed', label: 'View Feed' }
- ]
- }
- ]
- },
+/**
+ * Enhanced Multilingual Emotion Analysis Service for CivicStack
+ * AI-powered with Hugging Face API + Smart Keyword Fallback
+ *
+ * Extracted from routes/emotion.js so routes/complaints.js can reuse the
+ * same analysis (instead of duplicating logic or making a self HTTP call).
+ *
+ * The urgency/anger/concern/frustration weights and the per-category
+ * multiplier are both defined in services/priorityConfig.js (AHP-derived,
+ * with cited rationale) -- see that file and PRIORITY_ENGINE_REPORT.pdf.
+ */
+class EmotionAnalysisService {
+  constructor() {
+    this.config = {
+      huggingFaceToken: process.env.HUGGINGFACE_API_TOKEN,
+      // Local DistilBERT Python service (preferred — no API key needed)
+      localModelUrl: process.env.DISTILBERT_SERVICE_URL || 'http://127.0.0.1:5001',
+      // Remote HF API fallback models
+      models: [
+        'https://api-inference.huggingface.co/models/distilbert-base-uncased-finetuned-sst-2-english',
+        'https://api-inference.huggingface.co/models/cardiffnlp/twitter-roberta-base-sentiment-latest',
+        'https://api-inference.huggingface.co/models/nlptown/bert-base-multilingual-uncased-sentiment',
+        'https://api-inference.huggingface.co/models/cardiffnlp/twitter-xlm-roberta-base-sentiment'
+      ]
+    };
+    this.localModelAvailable = null; // will be checked on first call
 
- // Complaint Submission Process
- submit_complaint: {
- keywords: ['submit', 'report', 'complaint', 'how to submit', 'file complaint', 'report issue', 'pothole', 'pot hole', 'road damage', 'road issue', 'broken road'],
- responses: [
- {
- text: "**How to Submit a Complaint:**\n\n1. **Select Category** - Choose from Fire Hazard, Electrical Danger, Pothole, etc.\n2. **Auto Location** - We'll capture your location for priority assessment\n3. **Add Title & Description** - Use voice input in 11+ languages\n4. **Take Photo** - Our AI validates it's a real civic issue\n5. **AI Processing** - Get instant priority score and validation\n6. **Submit** - Your complaint is routed to authorities\n\n**Features:**\n Voice input in Hindi, Tamil, Telugu, English, etc.\n AI image validation\n Priority scoring based on location\n Privacy-protected location capture",
- confidence: 0.98,
- category: 'submission_guide',
- suggestedActions: [
- { type: 'submit_complaint', label: 'Start Submission' },
- { type: 'navigate', screen: 'PersonalReports', label: 'My Reports' }
- ]
- }
- ]
- },
+    // Enhanced multilingual keywords
+    this.emotionKeywords = {
+      hi: { // Hindi
+        anger: ['गुस्सा', 'क्रोध', 'नाराज़', 'परेशान', 'चिढ़', 'खफा'],
+        urgency: ['तुरंत', 'जल्दी', 'आपातकाल', 'खतरनाक', 'अभी', 'दुर्घटना', 'दुर्घटनाएं', 'मौत', 'मौतें', 'मृत्यु'],
+        frustration: ['परेशान', 'तंग', 'दुखी', 'चिंतित', 'हैरान', 'निराश'],
+        concern: ['चिंता', 'डर', 'फिक्र', 'घबराहट', 'बेचैनी', 'चिंतित']
+      },
+      en: { // English - Comprehensive civic complaint vocabulary
+        anger: ['angry', 'furious', 'mad', 'irritated', 'annoyed', 'frustrated', 'outraged', 'unacceptable',
+          'ridiculous', 'terrible', 'horrible', 'disgraceful', 'shameful', 'negligence', 'incompetent',
+          'useless', 'pathetic', 'worst', 'appalling', 'intolerable', 'infuriating'],
+        urgency: ['urgent', 'emergency', 'immediate', 'dangerous', 'critical', 'accident', 'accidents',
+          'death', 'deaths', 'fatal', 'unsafe', 'hazard', 'hazardous', 'risk', 'threat', 'harm',
+          'injury', 'injured', 'hurt', 'broken', 'damaged', 'collapsed', 'flooding', 'blocked',
+          'overflowing', 'children', 'school', 'hospital', 'life-threatening', 'asap', 'pothole',
+          'potholes', 'crack', 'cracks', 'sinkhole', 'danger', 'deadly', 'severe', 'major',
+          'collapsing', 'fallen', 'leaking', 'burst', 'electrocution', 'fire'],
+        frustration: ['frustrated', 'fed up', 'tired', 'disappointed', 'ignored', 'neglected',
+          'no action', 'nothing done', 'repeated', 'again', 'still', 'months', 'years',
+          'long time', 'complaint', 'waiting', 'delay', 'delayed', 'pending', 'unanswered',
+          'no response', 'waste of time', 'hopeless', 'given up', 'losing patience'],
+        concern: ['worried', 'concerned', 'scared', 'afraid', 'anxious', 'safety', 'risk',
+          'danger', 'dangerous', 'hazardous', 'children', 'elderly', 'school', 'hospital',
+          'health', 'disease', 'pollution', 'unsafe', 'vulnerable', 'fear', 'threatening',
+          'risky', 'unstable', 'damaged', 'broken', 'exposed', 'open', 'unprotected',
+          'residents', 'pedestrians', 'commuters', 'public', 'community', 'neighbourhood']
+      },
+      ta: { // Tamil - Comprehensive civic complaint keywords (includes alternate spellings)
+        anger: ['கோபம்', 'எரிச்சல்', 'சீற்றம்', 'வெறுப்பு', 'கோபமாக', 'எரிச்சலாக', 'கோபப்படுகிறேன்', 'வெறுக்கிறேன்',
+          'மோசமான', 'அலட்சியம்', 'கேவலம்', 'அசிங்கம்', 'மிக மோசம்', 'பொறுப்பற்ற', 'தரக்குறைவான'],
+        urgency: ['அவசரம்', 'உடனடி', 'ஆபத்து', 'முக்கியம்', 'அவசரமாக', 'உடனடியாக', 'ஆபத்தான', 'அவசர',
+          'மரணம்', 'விபத்து', 'உயிருக்கு ஆபத்து', 'பெரிய', 'மிகப்பெரிய',
+          'பிரச்சனை', 'பிரச்சினை', 'பிரச்னை', 'பிரச்சனைகள்', 'பிரச்சினைகள்',
+          'நிறைய', 'அதிகம்', 'மிகவும்', 'தீவிர', 'கடுமையான', 'மோசமான',
+          'குழி', 'குழிகள்', 'சாலை', 'சேதம்', 'உடைந்த', 'விரிசல்',
+          'வெள்ளம்', 'மின்சாரம்', 'கசிவு', 'தண்ணீர்', 'குப்பை'],
+        frustration: ['வருத்தம்', 'ஏமாற்றம்', 'வருத்தமாக', 'ஏமாற்றமாக', 'கஷ்டம்', 'துன்பம்', 'வேதனை', 'சோகம்',
+          'எத்தனை முறை', 'பல நாட்கள்', 'நடவடிக்கை இல்லை', 'காத்திருக்கிறோம்', 'தாமதம்',
+          'யாரும் கவனிக்கவில்லை', 'மீண்டும்', 'திரும்ப திரும்ப', 'சரியாகவில்லை'],
+        concern: ['கவலை', 'பயம்', 'கவலையாக', 'பயமாக', 'வேவலை', 'சிந்தனை', 'பரிவு', 'கவனம்',
+          'உளைச்சல்', 'நெருக்கடி', 'தேவை', 'சிக்கல்',
+          'பிரச்சனை', 'பிரச்சினை', 'பிரச்னை', 'பிரச்சனைகள்', 'பிரச்சினைகள்',
+          'பாதுகாப்பு', 'ஆபத்து', 'ஆபத்தான', 'நோய்', 'அசுத்தம்', 'தூய்மை',
+          'குழந்தைகள்', 'முதியவர்கள்', 'பள்ளி', 'மருத்துவமனை',
+          'நிறைய', 'அதிகம்', 'மிகவும்', 'ஏரியா', 'பகுதி', 'பகுதியில்']
+      }
+    };
+  }
 
- // Specific Pothole Reporting
- pothole_reporting: {
- keywords: ['pothole', 'pot hole', 'road hole', 'road damage', 'broken road', 'street damage', 'pavement damage'],
- responses: [
- {
- text: "**Reporting Potholes:**\n\n**Step-by-Step:**\n1. Open UrbanPulse app\n2. Tap 'Submit Complaint'\n3. Select 'Pothole' category\n4. Take clear photo showing the hole\n5. Add description (voice input available)\n6. Confirm location is accurate\n7. Submit - gets routed to road dept!\n\n**Pro Tips:**\n Photo from multiple angles\n Include size reference (coin, shoe)\n Mention traffic impact\n Use voice input in your language\n Vote on similar nearby potholes\n\n**Priority Factors:**\n Size and depth\n Traffic volume\n Near schools/hospitals\n Community votes",
- confidence: 0.95,
- category: 'pothole_guide',
- suggestedActions: [
- { type: 'submit_complaint', label: 'Report Pothole Now' },
- { type: 'view_map', label: 'See Other Potholes' }
- ]
- }
- ]
- },
+  /**
+   * Detect language from text
+   */
+  async detectLanguage(text) {
+    // Simple language detection based on script
+    if (/[ऀ-ॿ]/.test(text)) return 'hi'; // Hindi
+    if (/[஀-௿]/.test(text)) return 'ta'; // Tamil
+    if (/[ఀ-౿]/.test(text)) return 'te'; // Telugu
+    return 'en'; // Default to English
+  }
 
- // Civic Issues Categories
- civic_issues: {
- keywords: ['civic issues', 'categories', 'what can report', 'types of complaints', 'issue types'],
- responses: [
- {
- text: " **Civic Issues You Can Report:**\n\n **Urgent Issues:**\n Fire Hazard\n Electrical Danger\n Sewage Overflow\n\n **Safety Issues:**\n Broken Streetlight\n Traffic Signal Problems\n Road Damage\n\n **General Issues:**\n Potholes\n Garbage Collection\n Water Leakage\n Tree Issues\n Flooding\n Others\n\n Each category has different priority levels and response times. Urgent issues get immediate attention!",
- confidence: 0.92,
- category: 'civic_categories',
- suggestedActions: [
- { type: 'submit_complaint', label: ' Report Urgent Issue' },
- { type: 'view_feed', label: ' See Examples' }
- ]
- }
- ]
- },
+  /**
+   * AI-powered emotion analysis using LOCAL DistilBERT model
+   */
+  async analyzeWithLocalModel(text) {
+    const url = `${this.config.localModelUrl}/predict`;
+    console.log('🧠 Calling local DistilBERT service:', url);
 
- // Voting System
- voting: {
- keywords: ['vote', 'voting', 'upvote', 'support', 'priority', 'how voting works'],
- responses: [
- {
- text: " **How Voting Works:**\n\n **Upvote Complaints** - Support issues that affect you\n **Vote Count** - Higher votes = higher priority\n **Smart Priority** - Combines votes + location + AI analysis\n **Nearby Focus** - Vote on issues within 5km\n **Fair System** - One vote per user per complaint\n **Real Impact** - Your vote helps prioritize municipal response\n\n **Benefits:**\n Amplify community voice\n Faster resolution for popular issues\n Democratic prioritization\n Transparency in civic engagement",
- confidence: 0.90,
- category: 'voting_system',
- suggestedActions: [
- { type: 'view_feed', label: ' Start Voting' },
- { type: 'view_map', label: ' Find Issues to Vote On' }
- ]
- }
- ]
- },
+    const response = await axios.post(
+      url,
+      { text },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
+    );
 
- // Voice Input and Language Support
- voice_input: {
- keywords: ['voice', 'speech', 'language', 'hindi', 'tamil', 'telugu', 'speak', 'microphone'],
- responses: [
- {
- text: " **Voice Input Features:**\n\n **Supported Languages:**\n Hindi \n Tamil \n Telugu \n English\n Kannada \n Marathi \n Bengali \n Gujarati \n Malayalam \n Punjabi \n Urdu \n\n **How to Use:**\n1. Select your language\n2. Tap the microphone icon\n3. Speak clearly\n4. AI converts speech to text\n5. Review and submit\n\n Perfect for users who prefer speaking over typing!",
- confidence: 0.88,
- category: 'voice_features',
- suggestedActions: [
- { type: 'submit_complaint', label: ' Try Voice Input' }
- ]
- }
- ]
- },
+    console.log('✅ Local model response:', JSON.stringify(response.data));
+    return this.convertSentimentToEmotions(response.data, text);
+  }
 
- // Location and Privacy
- location_privacy: {
- keywords: ['location', 'privacy', 'gps', 'tracking', 'address', 'where', 'safety'],
- responses: [
- {
- text: " **Location & Privacy:**\n\n **Privacy Levels:**\n **Exact** - For urgent issues (Fire, Electrical)\n **Street** - General issues (Road, Pothole)\n **Area** - Sensitive locations\n **City** - Maximum privacy\n\n **How We Protect You:**\n Automatic privacy level selection\n No personal data stored\n Location used only for routing\n Street-level accuracy (25m)\n Option to recapture location\n\n **Why Location Matters:**\n Routes to correct municipal office\n Priority scoring near critical infrastructure\n Emergency response coordination\n Prevents duplicate reports",
- confidence: 0.94,
- category: 'location_privacy',
- suggestedActions: [
- { type: 'submit_complaint', label: ' Test Location Capture' }
- ]
- }
- ]
- },
+  /**
+   * Check if local DistilBERT service is running
+   */
+  async checkLocalModel() {
+    if (this.localModelAvailable !== null) return this.localModelAvailable;
+    try {
+      await axios.get(`${this.config.localModelUrl}/health`, { timeout: 3000 });
+      this.localModelAvailable = true;
+      console.log('✅ Local DistilBERT service is available');
+    } catch {
+      this.localModelAvailable = false;
+      console.log('⚠️ Local DistilBERT service not available, will use fallbacks');
+    }
+    // Re-check every 60s in case the service comes up later
+    setTimeout(() => { this.localModelAvailable = null; }, 60000);
+    return this.localModelAvailable;
+  }
 
- // Image Validation and AI
- image_validation: {
- keywords: ['image', 'photo', 'ai', 'validation', 'picture', 'camera', 'upload'],
- responses: [
- {
- text: " **AI Image Validation:**\n\n **Smart Detection:**\n Verifies real civic issues\n Identifies problem types\n Provides confidence scores\n Prevents spam/irrelevant photos\n\n **Validation Process:**\n1. Upload/take photo\n2. AI analyzes image content\n3. Detects civic issue type\n4. Shows confidence percentage\n5. Allows submission if valid\n\n **Supported Issues:**\n Road damage, potholes\n Garbage, sewage\n Electrical hazards\n Water leaks\n Structural damage\n Traffic problems\n\n Even if validation fails, you can still submit for urgent issues!",
- confidence: 0.89,
- category: 'image_ai',
- suggestedActions: [
- { type: 'submit_complaint', label: ' Try Image Upload' }
- ]
- }
- ]
- },
+  /**
+   * AI-powered emotion analysis using Hugging Face with multiple model fallbacks
+   */
+  async analyzeWithAI(text) {
+    if (!this.config.huggingFaceToken) {
+      throw new Error('No Hugging Face API token');
+    }
 
- // Map Features
- map_features: {
- keywords: ['map', 'location view', 'see complaints', 'nearby issues', 'visual', 'markers'],
- responses: [
- {
- text: " **Interactive Complaint Map:**\n\n **Map Features:**\n Real-time complaint markers\n Color-coded by status (Pending/In Progress/Resolved)\n Cluster view for dense areas\n Click markers for details\n Auto-fit to show all complaints\n User location indicator\n\n **Status Colors:**\n Red - Pending\n Yellow - In Progress\n Green - Resolved\n Blue - Under Review\n\n **Smart Features:**\n Auto-zoom to your area\n Filter by complaint type\n Distance-based clustering\n Smooth animations\n Offline caching",
- confidence: 0.91,
- category: 'map_guide',
- suggestedActions: [
- { type: 'view_map', label: ' Open Map' },
- { type: 'submit_complaint', label: ' Add to Map' }
- ]
- }
- ]
- },
+    console.log('🤖 Starting AI analysis for text:', text.substring(0, 50));
 
- // Feed and Social Features
- feed_features: {
- keywords: ['feed', 'social', 'instagram', 'scroll', 'posts', 'timeline', 'nearby'],
- responses: [
- {
- text: " **Instagram-Style Feed:**\n\n **Feed Features:**\n Beautiful card-based layout\n Nearby complaints (5km radius)\n User profiles and avatars\n Time stamps and status badges\n Category icons and descriptions\n Smooth scroll animations\n Pull-to-refresh\n\n **Social Elements:**\n Upvote directly from feed\n User information display\n Location details\n Priority indicators\n Progress tracking\n Engagement metrics\n\n **Smart Sorting:**\n Distance-based priority\n Recent activity first\n High-voted issues prominent\n Emergency issues at top",
- confidence: 0.87,
- category: 'feed_guide',
- suggestedActions: [
- { type: 'view_feed', label: ' Open Feed' },
- { type: 'submit_complaint', label: ' Add to Feed' }
- ]
- }
- ]
- },
+    // Try each model until one works
+    for (let i = 0; i < this.config.models.length; i++) {
+      const modelUrl = this.config.models[i];
+      console.log(`🔄 Trying model ${i + 1}/${this.config.models.length}: ${modelUrl.split('/').pop()}`);
 
- // Admin and Transparency
- transparency: {
- keywords: ['admin', 'transparency', 'government', 'municipal', 'authority', 'response'],
- responses: [
- {
- text: " **Transparency & Accountability:**\n\n **Admin Features:**\n Priority queue management\n Real-time complaint tracking\n Citizen communication tools\n Progress reporting\n Resource allocation\n Performance analytics\n\n **Public Transparency:**\n Open complaint database\n Response time tracking\n Resolution statistics\n Municipal performance metrics\n Public voting influence\n Community engagement data\n\n **Accountability Measures:**\n Automated routing to departments\n SLA tracking\n Public progress updates\n Feedback collection\n Performance reporting",
- confidence: 0.86,
- category: 'transparency',
- suggestedActions: [
- { type: 'view_feed', label: ' See Public Data' },
- { type: 'personal_reports', label: ' Track My Reports' }
- ]
- }
- ]
- },
+      try {
+        const response = await axios.post(
+          modelUrl,
+          { inputs: text },
+          {
+            headers: {
+              'Authorization': `Bearer ${this.config.huggingFaceToken}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 15000
+          }
+        );
 
- // Troubleshooting and Help
- troubleshooting: {
- keywords: ['help', 'problem', 'error', 'not working', 'bug', 'issue', 'fix', 'troubleshoot'],
- responses: [
- {
- text: " **Troubleshooting Guide:**\n\n **Common Issues:**\n **Location not working** - Enable GPS, check permissions\n **Camera issues** - Grant camera permission\n **Voice input failing** - Allow microphone access\n **Image upload slow** - Check internet connection\n **Map not loading** - Refresh app, check network\n\n **Quick Fixes:**\n Restart the app\n Check internet connection\n Update app permissions\n Clear app cache\n Ensure latest version\n\n **Emergency Bypass:**\n Submit without photo if urgent\n Use manual location entry\n Contact support via email\n Call emergency services for critical issues",
- confidence: 0.92,
- category: 'troubleshooting',
- suggestedActions: [
- { type: 'submit_complaint', label: ' Try Again' }
- ]
- }
- ]
- },
+        console.log('✅ AI Model succeeded! Response:', response.data);
+        return this.convertSentimentToEmotions(response.data, text);
 
- // Emergency and Urgent Issues
- emergency: {
- keywords: ['emergency', 'urgent', 'fire', 'electrical', 'danger', 'safety', 'critical'],
- responses: [
- {
- text: " **Emergency Reporting:**\n\n **Urgent Categories:**\n **Fire Hazard** - Immediate response\n **Electrical Danger** - Safety priority\n **Sewage Overflow** - Health emergency\n **Gas Leak** - Critical safety\n **Structural Collapse** - Immediate danger\n\n **Emergency Process:**\n1. Select urgent category\n2. Exact location capture\n3. Immediate photo upload\n4. Instant AI validation\n5. Direct routing to emergency services\n6. Real-time tracking\n\n **Important:**\n For life-threatening emergencies, call 112/911 first\n Use app for infrastructure emergencies\n Provides additional documentation\n Ensures follow-up tracking",
- confidence: 0.96,
- category: 'emergency_guide',
- suggestedActions: [
- { type: 'submit_complaint', label: ' Report Emergency' }
- ]
- }
- ]
- }
-};
+      } catch (error) {
+        console.log(`❌ Model ${i + 1} failed:`, error.response?.status || error.message);
 
-// AI Response Matching Algorithm
-class ChatbotKnowledgeMatcher {
- constructor {
- this.knowledgeBase = CIVIC_KNOWLEDGE_BASE;
- }
+        // If this is the last model, throw the error
+        if (i === this.config.models.length - 1) {
+          throw new Error(`All AI models failed. Last error: ${error.message}`);
+        }
 
- // Find best matching response for user query
- findBestMatch(userMessage, conversationHistory = []) {
- const message = userMessage.toLowerCase;
- let bestMatch = null;
- let highestScore = 0;
+        // Otherwise, continue to next model
+        continue;
+      }
+    }
+  }
 
- // Check each knowledge category
- for (const [category, data] of Object.entries(this.knowledgeBase)) {
- const score = this.calculateMatchScore(message, data.keywords);
- 
- if (score > highestScore) {
- highestScore = score;
- bestMatch = {
- category,
- ...data.responses[0], // Use first response for now
- matchScore: score
- };
- }
- }
+  /**
+   * Convert sentiment analysis to civic emotion format
+   */
+  convertSentimentToEmotions(sentimentData, text) {
+    console.log('🔄 Converting sentiment data:', sentimentData);
 
- // If no good match found, return generic help
- if (highestScore < 0.3) {
- return this.getGenericHelp(message);
- }
+    const emotions = { anger: 0, urgency: 0, frustration: 0, concern: 0 };
 
- return bestMatch;
- }
+    // Handle different API response formats
+    let sentiment = null;
 
- // Calculate similarity score between user message and keywords
- calculateMatchScore(message, keywords) {
- let totalScore = 0;
- let matchCount = 0;
+    // Handle nested array format: [[{label, score}, ...]]
+    if (Array.isArray(sentimentData) && Array.isArray(sentimentData[0]) && sentimentData[0].length > 0) {
+      // Find the highest scoring sentiment from nested array
+      sentiment = sentimentData[0][0]; // First item has highest score
+    }
+    // Handle simple array format: [{label, score}, ...]
+    else if (Array.isArray(sentimentData) && sentimentData.length > 0 && sentimentData[0].label) {
+      sentiment = sentimentData[0];
+    }
+    // Handle direct object format: {label, score}
+    else if (sentimentData && sentimentData.label) {
+      sentiment = sentimentData;
+    }
 
- keywords.forEach(keyword => {
- if (message.includes(keyword.toLowerCase)) {
- totalScore += keyword.length / message.length;
- matchCount++;
- }
- });
+    if (sentiment && sentiment.label) {
+      const label = sentiment.label.toLowerCase();
+      const score = sentiment.score;
 
- // Boost score if multiple keywords match
- const matchBonus = matchCount > 1 ? 0.2 : 0;
- return Math.min(totalScore + matchBonus, 1.0);
- }
+      console.log(`📊 AI Sentiment: ${label} (${score.toFixed(3)})`);
 
- // Generate generic help response
- getGenericHelp(message) {
- const isQuestion = message.includes('?');
- const isGreeting = ['hi', 'hello', 'hey', 'namaste'].some(g => message.includes(g));
+      // Map sentiment to civic emotions
+      if (label.includes('negative') || label === '1 star' || label === '2 stars') {
+        emotions.concern = score * 0.9;
+        emotions.frustration = score * 0.7;
 
- if (isGreeting) {
- return {
- text: "Hello! I'm your UrbanPulse Assistant. I can help you with:\n\n- Submitting complaints\n- Using the map\n- Voting system\n- Voice input\n- Image validation\n- Troubleshooting\n\nWhat would you like to know?",
- confidence: 0.8,
- category: 'greeting',
- suggestedActions: [
- { type: 'submit_complaint', label: 'Submit Complaint' },
- { type: 'view_feed', label: 'View Feed' }
- ]
- };
- }
+        // Check for urgency indicators in text
+        const urgencyBoost = this.detectUrgencyFromText(text);
+        emotions.urgency = Math.min(score * 0.6 + urgencyBoost, 1.0);
 
- return {
- text: "I'm not sure about that specific question, but I can help with:\n\n- **App Features** - Navigation and functionality\n- **Complaint Submission** - Step-by-step guide\n- **Civic Issues** - What you can report\n- **Voting** - How the system works\n- **Voice Input** - Multi-language support\n- **Troubleshooting** - Fixing common issues\n\nTry asking about any of these topics!",
- confidence: 0.5,
- category: 'generic_help',
- suggestedActions: [
- { type: 'submit_complaint', label: 'How to Submit?' },
- { type: 'view_feed', label: 'App Features?' }
- ]
- };
- }
+        // If very negative sentiment, add some anger
+        if (score > 0.7) {
+          emotions.anger = score * 0.5;
+        }
+      } else if (label.includes('positive') || label === '4 stars' || label === '5 stars') {
+        // Even positive text can have urgency for civic issues
+        const urgencyBoost = this.detectUrgencyFromText(text);
+        emotions.urgency = urgencyBoost;
 
- // Get contextual follow-up suggestions
- getFollowUpSuggestions(category, userMessage) {
- const followUps = {
- app_overview: [
- "How do I submit my first complaint?",
- "What civic issues can I report?",
- "How does the voting system work?"
- ],
- submission_guide: [
- "What happens after I submit?",
- "How is priority calculated?",
- "Can I track my complaint status?"
- ],
- civic_categories: [
- "Which issues are most urgent?",
- "How long does resolution take?",
- "Can I report multiple issues?"
- ],
- voting_system: [
- "How many votes make a difference?",
- "Can I change my vote?",
- "Do votes affect response time?"
- ]
- };
+        // For non-English languages (Tamil, Hindi), general-purpose sentiment
+        // models are known to misclassify negative/urgent civic complaints as
+        // "positive" (a documented low-resource-language limitation). We
+        // correct for that by re-scoring with the language-specific keyword
+        // detector and keeping the max of the two -- but WITHOUT an
+        // unconditional numeric floor: if neither the sentiment model nor
+        // the keyword detector finds any urgency/concern signal in the
+        // actual text, the score stays at 0 rather than being manufactured.
+        // (A prior version forced a minimum 0.3 concern / 0.2 urgency on
+        // every non-English "positive" complaint regardless of content,
+        // which systematically inflated priority for ordinary non-urgent
+        // complaints in these languages -- a fairness/accuracy bug, not a
+        // justified correction.)
+        const language = this.detectLanguage(text);
+        if (language === 'ta' || language === 'hi') {
+          const keywordEmotions = this.analyzeWithKeywords(text, language);
+          Object.keys(emotions).forEach(emotion => {
+            emotions[emotion] = Math.max(emotions[emotion], keywordEmotions[emotion]);
+          });
+        }
+      } else if (label.includes('neutral') || label === '3 stars') {
+        // Neutral sentiment - still check for urgency
+        const urgencyBoost = this.detectUrgencyFromText(text);
+        emotions.urgency = urgencyBoost;
+        emotions.concern = urgencyBoost * 0.5;
+      }
+    } else {
+      console.log('⚠️ Unknown sentiment format, using text analysis only');
+      // Fallback to pure text analysis
+      const urgencyBoost = this.detectUrgencyFromText(text);
+      emotions.urgency = urgencyBoost;
+      emotions.concern = urgencyBoost * 0.8;
+    }
 
- return followUps[category] || [];
- }
+    console.log('✅ Final AI emotions:', emotions);
+    return emotions;
+  }
+
+  /**
+   * Detect urgency from text content (comprehensive civic issues detection)
+   */
+  detectUrgencyFromText(text) {
+    const urgencyWords = [
+      // CRITICAL HEALTH TERMS
+      // English
+      'death', 'deaths', 'died', 'accident', 'accidents', 'emergency', 'urgent', 'critical', 'dangerous',
+      'disease', 'illness', 'sick', 'health', 'contamination', 'pollution', 'toxic', 'suffocating',
+      'stench', 'smell', 'dirty', 'filthy', 'overflow', 'leakage', 'burst',
+
+      // Hindi - Health & Sanitation
+      'मौत', 'मौतें', 'मृत्यु', 'दुर्घटना', 'दुर्घटनाएं', 'आपातकाल', 'खतरनाक', 'गंभीर',
+      'बीमारी', 'रोग', 'स्वास्थ्य', 'प्रदूषण', 'गंदगी', 'बदबू', 'दुर्गंध', 'सड़न',
+      'घुटन', 'घुट रहे', 'सीवेज', 'नाली', 'गंदा पानी', 'रिसाव', 'फूटना', 'बहना',
+      'मुश्किल', 'कठिनाई', 'परेशानी', 'दिक्कत', 'समस्या',
+
+      // SAFETY TERMS
+      // Hindi - Safety & Security
+      'सुरक्षा', 'सुरक्षित', 'असुरक्षित', 'खतरा', 'डर', 'चिंता',
+      'लड़कियों', 'महिलाओं', 'बच्चों', 'रात', 'अंधेरा', 'सुनिश्चित', 'नहीं',
+
+      // Tamil
+      'மரணம்', 'விபத்து', 'ஆபத்து', 'அவசரம்', 'பாதுகாப்பு', 'பயம்', 'கவலை', 'நோய்', 'அசுத்தம்'
+    ];
+
+    let urgencyScore = 0;
+    const textLower = text.toLowerCase();
+
+    urgencyWords.forEach(word => {
+      if (textLower.includes(word.toLowerCase())) {
+        urgencyScore += 0.20; // Good boost per keyword
+      }
+    });
+
+    // Special high-impact health phrases get higher scores
+    const criticalHealthPhrases = [
+      // Hindi
+      'घुट रहे हैं', 'बदबू में', 'गंदगी में', 'सीवेज का', 'गंदा पानी', 'बीमार हो रहे', 'स्वास्थ्य खराब',
+      'सांस लेने में दिक्कत', 'पेट की बीमारी', 'डेंगू का खतरा', 'मच्छर पैदा हो रहे',
+
+      // English
+      'suffocating in', 'health emergency', 'disease outbreak', 'contaminated water',
+      'breathing difficulty', 'stomach illness', 'mosquito breeding', 'health hazard'
+    ];
+
+    criticalHealthPhrases.forEach(phrase => {
+      if (textLower.includes(phrase.toLowerCase())) {
+        urgencyScore += 0.3; // High boost for critical health phrases
+      }
+    });
+
+    // Safety phrases (from previous implementation)
+    const safetyPhrases = [
+      'सुरक्षा सुनिश्चित नहीं', 'लड़कियों की सुरक्षा', 'रात के समय', 'चलना मुश्किल',
+      'women safety', 'girls safety', 'night time', 'walking difficult'
+    ];
+
+    safetyPhrases.forEach(phrase => {
+      if (textLower.includes(phrase.toLowerCase())) {
+        urgencyScore += 0.25; // Safety boost
+      }
+    });
+
+    return Math.min(urgencyScore, 1.0);
+  }
+
+  /**
+   * Detect safety concerns and return boost score
+   */
+  detectSafetyConcerns(text) {
+    const textLower = text.toLowerCase();
+    let safetyBoost = 0;
+
+    // High-priority safety phrases
+    const criticalSafetyPhrases = [
+      // Hindi
+      'सुरक्षा सुनिश्चित नहीं', 'लड़कियों की सुरक्षा', 'महिलाओं की सुरक्षा',
+      'रात के समय', 'अंधेरे में', 'चलना मुश्किल', 'डर लगता है',
+      // English
+      'women safety', 'girls safety', 'ladies safety', 'night time safety',
+      'walking difficult', 'afraid to walk', 'security concern', 'safety issue'
+    ];
+
+    // Check for critical safety phrases
+    criticalSafetyPhrases.forEach(phrase => {
+      if (textLower.includes(phrase)) {
+        safetyBoost += 0.12; // 12% boost per critical safety phrase
+      }
+    });
+
+    // Check for vulnerable groups mentions
+    const vulnerableGroups = [
+      'लड़कियों', 'लड़कियां', 'महिलाओं', 'बच्चों', 'बुजुर्गों',
+      'girls', 'women', 'ladies', 'children', 'elderly'
+    ];
+
+    vulnerableGroups.forEach(group => {
+      if (textLower.includes(group)) {
+        safetyBoost += 0.08; // 8% boost for vulnerable groups
+      }
+    });
+
+    // Check for time-based vulnerability (night, dark)
+    const timeVulnerability = ['रात', 'अंधेरा', 'night', 'dark', 'evening'];
+    timeVulnerability.forEach(time => {
+      if (textLower.includes(time)) {
+        safetyBoost += 0.05; // 5% boost for time vulnerability
+      }
+    });
+
+    return Math.min(safetyBoost, 0.30); // Cap at 30% boost
+  }
+
+  /**
+   * Keyword-based emotion analysis (fallback)
+   */
+  analyzeWithKeywords(text, language) {
+    console.log(`🔍 Keyword analysis for language: ${language}`);
+    const keywords = this.emotionKeywords[language] || this.emotionKeywords.en;
+    const emotions = { anger: 0, urgency: 0, frustration: 0, concern: 0 };
+    const textLower = text.toLowerCase();
+
+    Object.keys(emotions).forEach(emotion => {
+      const emotionKeywords = keywords[emotion] || [];
+      let score = 0;
+      let matchCount = 0;
+
+      emotionKeywords.forEach(keyword => {
+        if (textLower.includes(keyword.toLowerCase())) {
+          score += 0.25;
+          matchCount++;
+          console.log(`✅ Found ${emotion} keyword: "${keyword}"`);
+        }
+      });
+
+      emotions[emotion] = Math.min(score, 1.0);
+    });
+
+    // NOTE: a prior version of this function set a fixed minimum score
+    // (concern=0.40, urgency=0.35, frustration=0.15) for ANY non-English
+    // text whose keywords didn't match, regardless of what the text
+    // actually said -- manufacturing an emotion score from zero evidence.
+    // That systematically inflated priority for ordinary non-English
+    // complaints and is removed. If this keyword pass finds nothing,
+    // analyzeWithEnhancedKeywords()'s broader detectUrgencyFromText/
+    // detectConcernFromText/etc. calls (which have their own Hindi/Tamil
+    // coverage) and analyzeEmotion()'s translation-merge path (re-running
+    // English keyword analysis on a provided translation) are the
+    // legitimate ways more signal gets found -- not a hardcoded floor.
+
+    console.log(`📊 Keyword analysis result:`, emotions);
+    return emotions;
+  }
+
+  /**
+   * Calculate final emotion score with enhanced safety detection
+   */
+  calculateEmotionScore(emotions) {
+    const weights = priorityConfig.EMOTION_WEIGHTS; // AHP-derived, see priorityConfig.js
+
+    let baseScore = Object.keys(emotions).reduce((score, emotion) => {
+      return score + (emotions[emotion] * (weights[emotion] || 0));
+    }, 0);
+
+    // Safety multiplier - if concern is high, boost the score moderately
+    if (emotions.concern > 0.3) {
+      baseScore = Math.min(baseScore * 1.2, 1.0); // Reduced from 1.5x to 1.2x
+    }
+
+    return baseScore;
+  }
+
+  /**
+   * Apply category adjustments with comprehensive civic issue priorities.
+   *
+   * Previously this held ~30 independently hand-picked multipliers (1.0x-
+   * 1.9x), several for category names that could never actually occur here
+   * (this app's real complaint taxonomy has 8 classes -- see
+   * services/imageAnalysisService.js CIVIC_ISSUE_LABELS). Replaced with a
+   * shared, documented 6-tier lookup (services/priorityConfig.js) so the
+   * *ranking logic* (why a gas leak outranks a pothole) is auditable
+   * instead of 30 separate unexplained numbers, and so this multiplier
+   * agrees with the same category tiers used for the fallback priority
+   * score in routes/complaints.js.
+   */
+  applyCategoryAdjustments(score, category) {
+    const multiplier = priorityConfig.getCategoryMultiplier(category);
+    console.log(`🏷️ Category "${category}" (tier: ${priorityConfig.getCategoryTier(category)}) multiplier: ${multiplier.toFixed(3)}x`);
+    return Math.min(score * multiplier, 1.0);
+  }
+
+  /**
+   * Auto-detect civic issue category from text content
+   */
+  detectIssueCategory(text) {
+    const textLower = text.toLowerCase();
+
+    const categoryPatterns = {
+      // CRITICAL HEALTH HAZARDS - Health & Sanitation Keywords
+      'sewage_overflow': ['सीवेज', 'नाली', 'गंदा पानी', 'रिसाव', 'घुट रहे', 'बहना', 'फूटना', 'sewage', 'drain overflow', 'dirty water', 'waste water', 'burst pipe', 'கழிவுநீர்', 'வடிகால்'],
+
+      'water_contamination': ['पानी की गुणवत्ता', 'दूषित पानी', 'पीने का पानी', 'गंदा पानी', 'water quality', 'contaminated water', 'drinking water', 'dirty water', 'தண்ணீர் தரம்', 'அசுத்த நீர்'],
+
+      'health_emergency': ['बीमारी', 'रोग', 'स्वास्थ्य', 'बदबू', 'दुर्गंध', 'सड़न', 'घुटन', 'disease', 'illness', 'health emergency', 'contamination', 'stench', 'toxic', 'suffocating', 'நோய்', 'அசுத்தம்'],
+
+      // PUBLIC SAFETY ISSUES
+      'women_safety': ['लड़कियों की सुरक्षा', 'महिलाओं की सुरक्षा', 'women safety', 'girls safety', 'ladies safety', 'பெண்கள் பாதுகாப்பு'],
+
+      'night_safety': ['रात के समय', 'अंधेरा', 'स्ट्रीट लाइट', 'night time', 'street light', 'lighting', 'dark', 'இரவு நேரம்', 'தெரு விளக்கு'],
+
+      'broken_streetlight': ['स्ट्रीट लाइट', 'street light', 'lighting', 'light', 'lamp post', 'तार फूटे', 'broken light'],
+
+      // INFRASTRUCTURE FAILURES
+      'pothole': ['गड्ढे', 'सड़क के गड्ढे', 'potholes', 'road holes', 'சாலை குழி'],
+
+      'road_damage': ['सड़क', 'खराब सड़क', 'टूटी सड़क', 'road damage', 'broken road', 'damaged road', 'சாலை உடைவு'],
+
+      'water_logging': ['पानी भरा', 'जल जमाव', 'water logging', 'flooded road', 'standing water'],
+
+      'drain_blockage': ['नाली बंद', 'drain blocked', 'drainage problem', 'clogged drain'],
+
+      // BASIC SERVICES
+      'garbage_collection': ['कचरा', 'गंदगी', 'सफाई', 'garbage', 'waste', 'trash', 'cleaning', 'குப்பை'],
+
+      'water_supply': ['पानी की आपूर्ति', 'water supply', 'no water', 'पानी नहीं', 'தண்ணீர் வராது'],
+
+      'power_outage': ['बिजली', 'electricity', 'power cut', 'विद्युत', 'மின்சாரம்'],
+
+      'sanitation': ['साफ-सफाई', 'sanitation', 'hygiene', 'cleanliness'],
+
+      // ENVIRONMENTAL ISSUES
+      'air_pollution': ['प्रदूषण', 'हवा की गुणवत्ता', 'air pollution', 'smoke', 'dust', 'காற்று மாசு'],
+
+      'noise_pollution': ['शोर', 'आवाज', 'noise', 'sound pollution', 'loud', 'ஒலி மாசு'],
+
+      'water_pollution': ['पानी का प्रदूषण', 'water pollution', 'river pollution', 'நீர் மாசு'],
+
+      'illegal_dumping': ['अवैध कचरा', 'illegal dumping', 'waste dumping', 'garbage dumping']
+    };
+
+    let detectedCategory = 'general';
+    let maxMatches = 0;
+
+    // Find category with most keyword matches
+    for (const [category, keywords] of Object.entries(categoryPatterns)) {
+      let matches = 0;
+      keywords.forEach(keyword => {
+        if (textLower.includes(keyword.toLowerCase())) {
+          matches++;
+        }
+      });
+
+      if (matches > maxMatches) {
+        maxMatches = matches;
+        detectedCategory = category;
+      }
+    }
+
+    console.log(`🎯 Auto-detected category: "${detectedCategory}" (${maxMatches} keyword matches)`);
+    return detectedCategory;
+  }
+
+  /**
+   * Main emotion analysis function with robust fallback
+   */
+  async analyzeEmotion(text, category = null, translation = null) {
+    try {
+      console.log('🧠 Starting emotion analysis:', text.substring(0, 50));
+      if (translation) console.log('🌐 English translation available:', translation.substring(0, 50));
+
+      const language = await this.detectLanguage(text);
+      console.log(`📊 Detected language: ${language}`);
+
+      // Auto-detect category if not provided
+      if (!category) {
+        category = this.detectIssueCategory(text);
+      }
+
+      // null (not {}) so the `!emotions` fallback checks below correctly trigger
+      // when checkLocalModel() is false and this variable is never reassigned.
+      let emotions = null;
+      let analysisMethod = '';
+
+      // For Tamil/Hindi text, use enhanced keyword analysis + English translation if available
+      if (language === 'ta' || language === 'hi') {
+        console.log(`🌟 ${language === 'ta' ? 'Tamil' : 'Hindi'} text detected - using enhanced keyword analysis`);
+        emotions = this.analyzeWithEnhancedKeywords(text, language);
+        analysisMethod = `enhanced-keywords-${language === 'ta' ? 'tamil' : 'hindi'}`;
+
+        // If English translation is available, also analyze it and merge (take max per emotion)
+        if (translation && translation.trim().length > 0) {
+          console.log('🌐 Also analyzing English translation for better accuracy');
+          const translationEmotions = this.analyzeWithEnhancedKeywords(translation, 'en');
+          console.log('🌐 Translation emotion scores:', translationEmotions);
+          Object.keys(emotions).forEach(emotion => {
+            if (translationEmotions[emotion] > emotions[emotion]) {
+              console.log(`🌐 Boosting ${emotion}: ${emotions[emotion].toFixed(2)} → ${translationEmotions[emotion].toFixed(2)} (from translation)`);
+              emotions[emotion] = translationEmotions[emotion];
+            }
+          });
+          analysisMethod += '+translation';
+        }
+      }
+      // 1) Try LOCAL DistilBERT model first (no API key needed)
+      else if (await this.checkLocalModel()) {
+        try {
+          console.log('🧠 Using local DistilBERT model...');
+          emotions = await this.analyzeWithLocalModel(text);
+          analysisMethod = 'local-distilbert';
+          console.log('✅ Local model analysis successful');
+        } catch (error) {
+          console.log('⚠️ Local model failed:', error.message);
+          // Mark unavailable so we don't keep trying a broken service
+          this.localModelAvailable = false;
+          // Fall through to HF API or keywords
+          emotions = null;
+        }
+      }
+      // 2) Try remote Hugging Face API (needs token)
+      if (!emotions && this.config.huggingFaceToken && this.config.huggingFaceToken.startsWith('hf_') && this.config.huggingFaceToken.length > 20) {
+        try {
+          console.log('🤖 Attempting HF API analysis...');
+          emotions = await this.analyzeWithAI(text);
+          analysisMethod = 'ai-powered';
+          console.log('✅ HF API analysis successful');
+        } catch (error) {
+          console.log('⚠️ HF API failed, using enhanced keyword analysis');
+          emotions = null;
+        }
+      }
+      // 3) Fallback to enhanced keywords
+      if (!emotions) {
+        console.log('📝 Using enhanced keyword analysis');
+        emotions = this.analyzeWithEnhancedKeywords(text, language);
+        analysisMethod = analysisMethod || 'enhanced-keywords';
+      }
+
+      const emotionScore = this.calculateEmotionScore(emotions);
+      let adjustedScore = this.applyCategoryAdjustments(emotionScore, category);
+
+      // Additional safety concern boost
+      const safetyBoost = this.detectSafetyConcerns(text);
+      if (safetyBoost > 0) {
+        adjustedScore = Math.min(adjustedScore + safetyBoost, 1.0);
+        console.log(`🚨 Safety concern detected, boosting score by ${(safetyBoost * 100).toFixed(1)}%`);
+      }
+
+      console.log('🎯 Analysis result:', { emotions, baseScore: emotionScore, finalScore: adjustedScore, method: analysisMethod, category });
+
+      return {
+        success: true,
+        emotionScore: adjustedScore,
+        emotions,
+        language,
+        analysisMethod,
+        category
+      };
+    } catch (error) {
+      console.error('❌ Analysis failed:', error);
+
+      return {
+        success: false,
+        emotionScore: 0.5,
+        emotions: { anger: 0, urgency: 0, frustration: 0, concern: 0 },
+        language: 'unknown',
+        analysisMethod: 'emergency-fallback',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Enhanced keyword analysis with better detection
+   */
+  analyzeWithEnhancedKeywords(text, language) {
+    // Start with basic keyword analysis
+    let emotions = this.analyzeWithKeywords(text, language);
+
+    // Enhanced urgency detection from content
+    const urgencyBoost = this.detectUrgencyFromText(text);
+    emotions.urgency = Math.max(emotions.urgency, urgencyBoost);
+
+    // Enhanced concern detection
+    const concernBoost = this.detectConcernFromText(text);
+    emotions.concern = Math.max(emotions.concern, concernBoost);
+
+    // Enhanced anger detection
+    const angerBoost = this.detectAngerFromText(text);
+    emotions.anger = Math.max(emotions.anger, angerBoost);
+
+    // Enhanced frustration detection
+    const frustrationBoost = this.detectFrustrationFromText(text);
+    emotions.frustration = Math.max(emotions.frustration, frustrationBoost);
+
+    // NOTE: a prior version of this function additionally forced a minimum
+    // total emotion score onto any "low scoring" complaint (a stronger,
+    // second floor for non-English text stacked on top of the one already
+    // removed from analyzeWithKeywords() above), regardless of what the
+    // keyword/boost detectors above actually found. Removed for the same
+    // reason: a genuinely low-urgency complaint should score low -- that is
+    // the correct, accurate output, not a bug to patch over. Emotion is
+    // only priorityConfig.TOP_LEVEL_WEIGHTS.emotionScore (~14%) of the
+    // final priority score, by design (see priorityConfig.js section 2), so
+    // a low emotion reading does not suppress a genuinely severe complaint
+    // that the infrastructure/image signals already caught.
+
+    console.log('🔍 Enhanced keyword analysis complete:', emotions);
+    return emotions;
+  }
+
+  /**
+   * Enhanced concern detection
+   */
+  detectConcernFromText(text) {
+    const concernIndicators = [
+      // English - civic concerns
+      'worried', 'concerned', 'afraid', 'scared', 'nervous', 'anxious', 'trouble', 'problem',
+      'safety', 'risk', 'danger', 'dangerous', 'hazard', 'hazardous', 'unsafe', 'threat',
+      'children', 'school', 'hospital', 'elderly', 'pedestrians', 'residents', 'commuters',
+      'health', 'disease', 'pollution', 'contamination', 'broken', 'damaged', 'exposed',
+      'vulnerable', 'unprotected', 'unstable', 'collapsing', 'falling', 'leaking',
+      'potholes', 'pothole', 'crack', 'cracks', 'flooded', 'blocked', 'overflowing',
+      'accident', 'injury', 'hurt', 'harm', 'public', 'community', 'neighbourhood',
+      // Hindi
+      'चिंतित', 'परेशान', 'डरा', 'घबराया', 'समस्या', 'मुसीबत', 'खतरा', 'सुरक्षा',
+      'बच्चों', 'स्कूल', 'अस्पताल', 'बुजुर्ग', 'स्वास्थ्य',
+      // Tamil
+      'கவலை', 'பயம்', 'பிரச்சினை', 'ஆபத்து', 'பாதுகாப்பு'
+    ];
+
+    return this.calculateTextScore(text, concernIndicators, 0.2);
+  }
+
+  /**
+   * Enhanced anger detection
+   */
+  detectAngerFromText(text) {
+    const angerIndicators = [
+      // English - civic complaint anger
+      'angry', 'furious', 'outraged', 'mad', 'frustrated', 'fed up', 'enough',
+      'unacceptable', 'ridiculous', 'terrible', 'horrible', 'disgraceful', 'shameful',
+      'negligence', 'incompetent', 'useless', 'pathetic', 'worst', 'appalling',
+      'intolerable', 'infuriating', 'disgusting', 'deplorable', 'inexcusable',
+      'irresponsible', 'careless', 'reckless', 'corrupt', 'waste',
+      // Hindi
+      'गुस्सा', 'क्रोध', 'नाराज़', 'बहुत परेशान', 'घटिया', 'बदतर', 'लापरवाही',
+      // Tamil
+      'கோபம்', 'எரிச்சல்', 'மோசமான', 'அலட்சியம்'
+    ];
+
+    return this.calculateTextScore(text, angerIndicators, 0.3);
+  }
+
+  /**
+   * Enhanced frustration detection
+   */
+  detectFrustrationFromText(text) {
+    const frustrationIndicators = [
+      // English - civic frustration
+      'frustrated', 'fed up', 'tired', 'disappointed', 'ignored', 'neglected',
+      'no action', 'nothing done', 'repeated', 'again', 'still not fixed',
+      'months', 'years', 'long time', 'waiting', 'delay', 'delayed', 'pending',
+      'unanswered', 'no response', 'waste of time', 'hopeless', 'given up',
+      'losing patience', 'how many times', 'multiple complaints', 'no improvement',
+      'same problem', 'getting worse', 'deteriorating', 'nobody cares',
+      // Hindi
+      'निराश', 'ऊबा', 'तंग', 'इंतजार', 'कई बार', 'कोई कार्रवाई नहीं',
+      // Tamil
+      'ஏமாற்றம்', 'வருத்தம்', 'காத்திருக்கிறோம்'
+    ];
+
+    return this.calculateTextScore(text, frustrationIndicators, 0.25);
+  }
+
+  /**
+   * Helper function to calculate emotion score from text indicators
+   */
+  calculateTextScore(text, indicators, baseScore) {
+    let score = 0;
+    const textLower = text.toLowerCase();
+
+    indicators.forEach(indicator => {
+      if (textLower.includes(indicator.toLowerCase())) {
+        score += baseScore;
+      }
+    });
+
+    return Math.min(score, 1.0);
+  }
 }
 
-module.exports = { CIVIC_KNOWLEDGE_BASE, ChatbotKnowledgeMatcher };
-
-
+module.exports = EmotionAnalysisService;
+module.exports.EmotionAnalysisService = EmotionAnalysisService;
+module.exports.emotionService = new EmotionAnalysisService();

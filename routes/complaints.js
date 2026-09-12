@@ -2,9 +2,66 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
 const LocationPriorityService = require('../services/LocationPriorityService');
+const { emotionService } = require('../services/EmotionAnalysisService');
+const { analyzeTextAuthenticity } = require('../services/TextAuthenticityService');
+const priorityConfig = require('../services/priorityConfig');
+const potholeGeometryService = require('../services/potholeGeometryService');
+const { castUpvote, toggleUpvote } = require('../services/voteService');
+const { findNearbyDuplicateComplaint } = require('../services/duplicateComplaintService');
 
 // Initialize services
 const locationPriorityService = new LocationPriorityService();
+
+/**
+ * Run sentiment/emotion analysis and authenticity/correctness checks on a
+ * complaint description together, so both the pre-submit check and the
+ * final submission use one source of truth.
+ */
+async function analyzeComplaintText({ description, category, imagePrimaryClass, translation }) {
+  const [emotionResult, authenticity] = await Promise.all([
+    emotionService.analyzeEmotion(description, category, translation),
+    Promise.resolve(analyzeTextAuthenticity({ text: description, category, imagePrimaryClass })),
+  ]);
+
+  return { emotion: emotionResult, authenticity };
+}
+
+/**
+ * POST /api/complaints/analyze-text
+ * Lets the client run sentiment + authenticity/correctness checks on a
+ * description before final submission, so the UI can warn the citizen if
+ * their text doesn't seem to match the selected/detected issue category
+ * (e.g. category is "pothole" but the description is about something else)
+ * or reads like spam/gibberish.
+ */
+router.post('/analyze-text', async (req, res) => {
+  try {
+    const { description, category, imagePrimaryClass, translation } = req.body;
+
+    if (!description || !description.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'description is required',
+        code: 'MISSING_DESCRIPTION'
+      });
+    }
+
+    const result = await analyzeComplaintText({ description, category, imagePrimaryClass, translation });
+
+    res.json({
+      success: true,
+      emotion: result.emotion,
+      authenticity: result.authenticity,
+    });
+  } catch (error) {
+    console.error('❌ Text analysis error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze complaint text',
+      details: error.message
+    });
+  }
+});
 
 /**
  * Submit a new complaint with automatic location processing
@@ -13,7 +70,7 @@ const locationPriorityService = new LocationPriorityService();
 // Function to check the complaints table schema
 async function checkComplaintsTableSchema() {
   try {
-    console.log(' Checking complaints table schema...');
+    console.log('📊 Checking complaints table schema...');
     // Introspect the table schema to see column names
     const { data, error } = await supabase
       .from('complaints')
@@ -21,19 +78,19 @@ async function checkComplaintsTableSchema() {
       .limit(1);
       
     if (error) {
-      console.error(' Schema check error:', error);
+      console.error('❌ Schema check error:', error);
       return null;
     }
     
     if (data && data.length > 0) {
-      console.log(' Available columns in complaints table:', Object.keys(data[0]));
+      console.log('📋 Available columns in complaints table:', Object.keys(data[0]));
       return Object.keys(data[0]);
     } else {
-      console.log(' No records in complaints table to infer schema');
+      console.log('ℹ️ No records in complaints table to infer schema');
       return [];
     }
   } catch (error) {
-    console.error(' Schema check failed:', error);
+    console.error('❌ Schema check failed:', error);
     return null;
   }
 }
@@ -51,16 +108,16 @@ async function filterComplaintDataForInsertion(complaintData, availableColumns) 
   
   // Validate numeric fields to prevent overflow errors
   // For columns with precision 3, scale 2 (max value < 10)
-  const numericFields = ['priority_score', 'location_sensitivity_score', 'emotion_score', 'ai_confidence_score'];
+  const numericFields = ['priority_score', 'location_sensitivity_score', 'emotion_score', 'ai_confidence_score', 'text_authenticity_score'];
   numericFields.forEach(field => {
     if (field in filteredData) {
       // Ensure value is a number between 0 and 9.99
       if (typeof filteredData[field] === 'number') {
         if (filteredData[field] >= 10) {
-          console.log(` Adjusting ${field} from ${filteredData[field]} to 9.99 to prevent overflow`);
+          console.log(`⚠️ Adjusting ${field} from ${filteredData[field]} to 9.99 to prevent overflow`);
           filteredData[field] = 9.99;
         } else if (filteredData[field] < 0) {
-          console.log(` Adjusting ${field} from ${filteredData[field]} to 0 to ensure positive value`);
+          console.log(`⚠️ Adjusting ${field} from ${filteredData[field]} to 0 to ensure positive value`);
           filteredData[field] = 0;
         } else {
           // Ensure we're working with 2 decimal places max
@@ -70,19 +127,19 @@ async function filterComplaintDataForInsertion(complaintData, availableColumns) 
     }
   });
   
-  console.log('Filtered complaint data for insertion:', filteredData);
+  console.log('📝 Filtered complaint data for insertion:', filteredData);
   return filteredData;
 }
 
 router.post('/submit', async (req, res) => {
   try {
-    console.log('New complaint submission:', req.body);
+    console.log('📝 New complaint submission:', req.body);
     
-    
+    // Check if user is authenticated
     const authenticatedUser = req.user;
-    console.log('Authenticated user:', authenticatedUser ? authenticatedUser.id : 'None');
+    console.log('👤 Authenticated user:', authenticatedUser ? authenticatedUser.id : 'None');
     
-    
+    // Check the table schema first
     const columns = await checkComplaintsTableSchema() || [];
     
     const {
@@ -105,14 +162,7 @@ router.post('/submit', async (req, res) => {
       });
     }
     
-    // Calculate comprehensive priority score
-    const priorityAnalysis = await calculateComprehensivePriority({
-      imageValidation,
-      locationData,
-      category,
-      description
-    });
-    
+    // Generate a proper UUID for demo users or use the provided userId if it's in UUID format
     const generateUuid = () => {
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -120,6 +170,7 @@ router.post('/submit', async (req, res) => {
       });
     };
     
+    // Validate if string is a UUID
     const isUuid = (str) => {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       return uuidRegex.test(str);
@@ -127,53 +178,57 @@ router.post('/submit', async (req, res) => {
     
     // Create or ensure the demo user exists for foreign key constraint
     const ensureDemoUser = async () => {
-      console.log('Checking for demo user...');
+      console.log('🔍 Checking for demo user...');
       
       // First, check if our default demo user exists
       const { data: existingUser, error: findError } = await supabase
         .from('users')
         .select('id')
-        .eq('email', 'demo@urbanpulse.org')
+        .eq('email', 'demo@civicrezo.org')
         .limit(1);
       
       if (findError) {
-        console.error(' Error checking for demo user:', findError);
+        console.error('❌ Error checking for demo user:', findError);
       }
       
       // If user exists, return its ID
       if (existingUser && existingUser.length > 0) {
-        console.log(' Using existing demo user:', existingUser[0].id);
+        console.log('✅ Using existing demo user:', existingUser[0].id);
         return existingUser[0].id;
       }
       
-      console.log(' Demo user not found, creating one...');
+      console.log('⚠️ Demo user not found, creating one...');
       
+      // Check if the RPC function exists by trying to call it
       try {
         const { data: demoId, error: rpcError } = await supabase.rpc('create_demo_user');
         
         if (!rpcError && demoId) {
-          console.log(' Created demo user via RPC:', demoId);
+          console.log('✅ Created demo user via RPC:', demoId);
           return demoId;
         }
         
         if (rpcError) {
-          console.log(' RPC function not available:', rpcError.message);
+          console.log('⚠️ RPC function not available:', rpcError.message);
+          // Fall back to direct insert
         }
       } catch (e) {
-        console.log(' RPC call failed, falling back to direct insert');
+        console.log('⚠️ RPC call failed, falling back to direct insert');
       }
       
+      // If RPC failed or isn't available, try direct insert
       const demoUuid = generateUuid();
       
       try {
+        // Use raw SQL to ensure the insert works correctly with the database schema
         const { data, error: sqlError } = await supabase.rpc('execute_sql', {
           sql_query: `
             INSERT INTO users (
               id, email, password, full_name, phone_number, 
               user_type, address, is_active, created_at, updated_at
             ) VALUES (
-              '${Uuid}', '${email}',
-              '${username}', '${phNo}', 'citizen', '${address}', 
+              '${demoUuid}', 'demo@civicrezo.org', 'not-a-real-password', 
+              'Demo User', '1234567890', 'citizen', 'Demo Address', 
               true, NOW(), NOW()
             )
             RETURNING id;
@@ -181,20 +236,21 @@ router.post('/submit', async (req, res) => {
         });
         
         if (sqlError) {
-          console.error(' SQL error creating demo user:', sqlError);
+          console.error('❌ SQL error creating demo user:', sqlError);
         } else {
-          console.log(' Created demo user via SQL:', data);
+          console.log('✅ Created demo user via SQL:', data);
           return demoUuid;
         }
       } catch (sqlExecError) {
-        console.error(' SQL execution error:', sqlExecError);
+        console.error('❌ SQL execution error:', sqlExecError);
       }
       
+      // Last attempt: standard insert
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
           id: demoUuid,
-          email: 'demo@urbanpulse.org',
+          email: 'demo@civicrezo.org',
           password: 'not-a-real-password-hash',
           full_name: 'Demo User',
           phone_number: '1234567890',
@@ -207,13 +263,13 @@ router.post('/submit', async (req, res) => {
         .select();
       
       if (insertError) {
-        console.error(' Error creating demo user:', insertError);
+        console.error('❌ Error creating demo user:', insertError);
         // All attempts failed, but we need to return something
-        console.log(' All demo user creation methods failed, using generated UUID as fallback');
+        console.log('⚠️ All demo user creation methods failed, using generated UUID as fallback');
         return demoUuid;
       }
       
-      console.log(' Created new demo user:', newUser[0].id);
+      console.log('✅ Created new demo user:', newUser[0].id);
       return newUser[0].id;
     };
     
@@ -222,20 +278,117 @@ router.post('/submit', async (req, res) => {
     
     // If user is authenticated, use their ID
     if (authenticatedUser && authenticatedUser.id) {
-      console.log(` Using authenticated user_id: ${authenticatedUser.id}`);
+      console.log(`🔑 Using authenticated user_id: ${authenticatedUser.id}`);
       userUuid = authenticatedUser.id;
     } 
     // If userId is provided in the request and it's a valid UUID, use it
     else if (isUuid(userId)) {
-      console.log(` Using provided user_id: ${userId}`);
+      console.log(`🔑 Using provided user_id: ${userId}`);
       userUuid = userId;
     } 
     // Otherwise create or find a demo user
     else {
       userUuid = await ensureDemoUser();
-      console.log(` Using demo user_id: ${userUuid}`);
+      console.log(`🔑 Using demo user_id: ${userUuid}`);
     }
-    
+
+    // --- Duplicate-complaint detection -------------------------------
+    // Same category within ~40m of an existing non-resolved complaint ->
+    // add this submitter's upvote to it instead of creating a new row (see
+    // services/duplicateComplaintService.js). Runs before the image/text
+    // validation and priority-scoring below, since a duplicate skips all
+    // of that entirely - no point spending a Roboflow/emotion-analysis
+    // call on a submission that isn't going to become a new complaint.
+    const duplicateComplaint = await findNearbyDuplicateComplaint({
+      supabase,
+      category,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+    });
+
+    if (duplicateComplaint) {
+      console.log(
+        `♻️ Duplicate complaint detected ${Math.round(duplicateComplaint._distanceMeters)}m away ` +
+        `(${duplicateComplaint.id}) - upvoting instead of creating a new complaint`
+      );
+
+      const { voteCount, alreadyVoted } = await castUpvote(supabase, duplicateComplaint.id, { userId: userUuid });
+
+      return res.json({
+        success: true,
+        duplicate: true,
+        // Same trimmed shape as the normal-submission response below
+        // (response.complaint), so the client can render either result
+        // with one code path.
+        complaint: {
+          id: duplicateComplaint.id,
+          title: duplicateComplaint.title,
+          category: duplicateComplaint.category,
+          status: duplicateComplaint.status,
+          submittedAt: duplicateComplaint.created_at,
+        },
+        voteCount,
+        alreadyVoted,
+        message: alreadyVoted
+          ? "This issue was already reported nearby, and you'd already voted for it — no new complaint or vote was added."
+          : 'This issue was already reported nearby, so we added your vote to it instead of creating a duplicate report.',
+      });
+    }
+
+    // Reject outright if an image was uploaded but never passed validation
+    // against the selected category (client should already prevent this,
+    // but the server is the authority — never trust the client alone).
+    if (imageUrl) {
+      if (!imageValidation || imageValidation.allowUpload !== true) {
+        return res.status(400).json({
+          success: false,
+          error: imageValidation?.message || 'The uploaded photo does not match the selected issue type.',
+          code: 'IMAGE_CATEGORY_MISMATCH',
+          categoryMatch: imageValidation?.categoryMatch ?? false,
+          detectedClass: imageValidation?.primaryClass || null,
+        });
+      }
+    }
+
+    // Analyze the description: sentiment/emotion + authenticity/correctness
+    // (does the text actually describe the declared/detected issue, and does
+    // it read like a genuine report rather than spam/gibberish?)
+    const textAnalysis = await analyzeComplaintText({
+      description,
+      category,
+      imagePrimaryClass: imageValidation?.primaryClass || null,
+    });
+    console.log('🔎 Text analysis result:', {
+      authenticityScore: textAnalysis.authenticity.authenticityScore,
+      flagged: textAnalysis.authenticity.flagged,
+      mismatchDetected: textAnalysis.authenticity.mismatchDetected,
+      emotionScore: textAnalysis.emotion.emotionScore,
+    });
+
+    // Reject outright if the description doesn't genuinely match the
+    // selected/detected issue (or reads like spam/gibberish) — no
+    // "submit anyway" path. The citizen must fix the text or the category.
+    if (textAnalysis.authenticity.flagged) {
+      return res.status(400).json({
+        success: false,
+        error: 'The description does not appear to match the selected issue type.',
+        code: 'DESCRIPTION_CATEGORY_MISMATCH',
+        contentAnalysis: {
+          authenticityScore: textAnalysis.authenticity.authenticityScore,
+          reasons: textAnalysis.authenticity.reasons,
+          suggestedCategory: textAnalysis.authenticity.suggestedCategory,
+        },
+      });
+    }
+
+    // Calculate comprehensive priority score
+    const priorityAnalysis = await calculateComprehensivePriority({
+      imageValidation,
+      locationData,
+      category,
+      description
+    });
+
     // Create a base complaint object with essential fields
     const baseComplaint = {
       title: title.trim(),
@@ -266,18 +419,26 @@ router.post('/submit', async (req, res) => {
       // For numeric fields with precision 3, scale 2, values must be < 10^1 (i.e., < 10)
       priority_score: parseFloat((priorityAnalysis.totalScore).toFixed(2)),
       location_sensitivity_score: parseFloat((priorityAnalysis.locationScore).toFixed(2)),
-      emotion_score: imageValidation?.confidence ? parseFloat((imageValidation.confidence).toFixed(2)) : 0.5,
-      
+      emotion_score: parseFloat((textAnalysis.emotion.emotionScore ?? 0.5).toFixed(2)),
+
       // Add AI confidence score if available
-      ai_confidence_score: imageValidation?.modelConfidence ? 
+      ai_confidence_score: imageValidation?.modelConfidence ?
         parseFloat((imageValidation.modelConfidence).toFixed(2)) : 0.5,
-      
+
+      // How well the description matches the declared/detected category and
+      // reads like a genuine report (0-1, see TextAuthenticityService)
+      text_authenticity_score: textAnalysis.authenticity.authenticityScore,
+      content_flagged: textAnalysis.authenticity.flagged,
+      content_flag_reason: textAnalysis.authenticity.reasons.join(' ') || null,
+
       // Images and media
       image_urls: imageUrl ? [imageUrl] : [],
       audio_url: null,
-      
+
       // Status fields
-      verification_status: imageValidation?.allowUpload ? 'verified' : 'unverified',
+      verification_status: textAnalysis.authenticity.flagged
+        ? 'flagged'
+        : (imageValidation?.allowUpload ? 'verified' : 'unverified'),
       assigned_department: null,
       assigned_admin_id: null,
       resolution_notes: null,
@@ -297,7 +458,7 @@ router.post('/submit', async (req, res) => {
         .select();
       
       if (error) {
-        console.error(' Supabase insert error:', error);
+        console.error('❌ Supabase insert error:', error);
         
         // Provide more specific error handling for numeric overflow
         if (error.code === '22003' && error.message.includes('numeric field overflow')) {
@@ -308,12 +469,27 @@ router.post('/submit', async (req, res) => {
       }
       
       complaint = data;
-      console.log(' Complaint saved to Supabase:', complaint);
+      console.log('✅ Complaint saved to Supabase:', complaint);
       
       // After successful complaint submission, create an initial complaint update entry
       if (complaint && complaint[0] && complaint[0].id) {
         const complaintId = complaint[0].id;
-        
+
+        // Fire-and-forget pothole footprint/depth estimation (see
+        // services/potholeGeometryService.js and PRIORITY_ENGINE plan doc
+        // "Pothole Footprint & Depth Estimation"). Deliberately NOT
+        // awaited and wrapped in .catch() so a slow/failed Roboflow call
+        // can never delay or fail the citizen's response below.
+        potholeGeometryService
+          .estimateAndPersistGeometry({
+            complaintId,
+            imageUrl,
+            category,
+            primaryClass: imageValidation?.primaryClass || null,
+            deviceTilt: req.body.deviceTilt ?? null, // present once the mobile app sends it (Phase 2)
+          })
+          .catch((e) => console.error('❌ Geometry estimation error (non-blocking):', e.message));
+
         // 1. Add entry to complaint_updates table
         const { data: updateData, error: updateError } = await supabase
           .from('complaint_updates')
@@ -327,48 +503,31 @@ router.post('/submit', async (req, res) => {
           }]);
         
         if (updateError) {
-          console.error(' Error creating complaint update entry:', updateError);
+          console.error('❌ Error creating complaint update entry:', updateError);
         } else {
-          console.log(' Added initial complaint update entry');
+          console.log('✅ Added initial complaint update entry');
         }
         
         
-        // 2. Add entry to complaint_votes table (creator's vote)
+        // 2. Register the creator's initial upvote (see services/voteService.js
+        // - also recomputes and persists complaints.vote_count, which the
+        // old delete-then-insert here never did, so a brand new complaint
+        // used to show a vote count of 0 despite the creator "having voted").
         try {
-          // Use a simpler approach - just delete existing votes first if any
-          await supabase
-            .from('complaint_votes')
-            .delete()
-            .eq('complaint_id', complaintId)
-            .eq('user_id', userUuid);
-            
-          // Then insert a fresh upvote
-          console.log('Adding initial upvote for complaint creator');
-          const { data: voteData, error: voteError } = await supabase
-            .from('complaint_votes')
-            .insert([{
-              complaint_id: complaintId,
-              user_id: userUuid,
-              vote_type: 'upvote'
-            }]);
-          
-          if (voteError) {
-            console.error(' Error creating complaint vote entry:', voteError);
-          } else {
-            console.log(' Added initial complaint vote entry');
-          }
+          await castUpvote(supabase, complaintId, { userId: userUuid });
+          console.log('✅ Added initial complaint vote entry');
         } catch (voteErr) {
-          console.error(' Exception in complaint vote creation:', voteErr);
+          console.error('❌ Exception in complaint vote creation:', voteErr.message);
         }
       }
     } catch (dbError) {
-      console.error(' Database operation failed:', dbError);
+      console.error('❌ Database operation failed:', dbError);
       
       // Attempt to get table schema directly (alternative approach)
       try {
         const { data: schema } = await supabase.rpc('get_table_columns', { table_name: 'complaints' });
         if (schema) {
-          console.log(' Complaints table columns:', schema);
+          console.log('📊 Complaints table columns:', schema);
         }
       } catch (e) {
         console.error('Could not fetch schema via RPC:', e);
@@ -378,21 +537,24 @@ router.post('/submit', async (req, res) => {
     }
     
     // Prepare response - safe access in case structure changed
-    const complaintRecord = complaint && complaint[0] ? complaint[0] : {}; 
-    
+    const complaintRecord = complaint && complaint[0] ? complaint[0] : {};
+
+    const finalScore = Number(priorityAnalysis.totalScore || 0);
+    const finalPriorityLevel = priorityConfig.getPriorityLevel(finalScore);
+
     const response = {
       success: true,
       complaint: {
         id: complaintRecord.id || `temp-${Date.now()}`,
         title: complaintRecord.title || title,
         category: complaintRecord.category || category,
-        priorityScore: complaintRecord.priority_score || Math.round(priorityAnalysis.totalScore * 100),
+        priorityScore: Math.round(finalScore * 100),
         status: complaintRecord.status || 'pending',
         submittedAt: complaintRecord.created_at || new Date().toISOString()
       },
       priorityAnalysis: {
-        totalScore: priorityAnalysis.totalScore,
-        priorityLevel: priorityAnalysis.priorityLevel,
+        totalScore: finalScore,
+        priorityLevel: finalPriorityLevel,
         breakdown: {
           locationScore: priorityAnalysis.locationScore,
           imageScore: priorityAnalysis.imageScore,
@@ -402,15 +564,23 @@ router.post('/submit', async (req, res) => {
       },
       location: {
         privacyLevel: locationData.privacyLevel,
-        accuracy: locationData.accuracy ? `${locationData.accuracy}m` : 'Unknown',
+        accuracy: locationData.accuracy ? `±${locationData.accuracy}m` : 'Unknown',
         description: locationData.description
       },
-      nextSteps: generateNextSteps(priorityAnalysis.priorityLevel, category),
+      contentAnalysis: {
+        authenticityScore: textAnalysis.authenticity.authenticityScore,
+        flagged: textAnalysis.authenticity.flagged,
+        mismatchDetected: textAnalysis.authenticity.mismatchDetected,
+        suggestedCategory: textAnalysis.authenticity.suggestedCategory,
+        reasons: textAnalysis.authenticity.reasons,
+        emotionScore: textAnalysis.emotion.emotionScore,
+      },
+      nextSteps: generateNextSteps(finalPriorityLevel, category),
     };
     
     res.json(response);
   } catch (error) {
-    console.error(' Complaint submission error:', error);
+    console.error('❌ Complaint submission error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to submit complaint',
@@ -421,241 +591,98 @@ router.post('/submit', async (req, res) => {
   }
 });
 
-
+/**
+ * Calculate comprehensive priority score combining image and location analysis.
+ *
+ * FIX: this function used to contain a second, independent priority
+ * formula (locationScore*0.6 + imageScore*0.4) that silently ran whenever
+ * LocationPriorityService.calculateComprehensivePriority() threw --
+ * meaning a transient Places-API hiccup could change which formula (and
+ * which undocumented weights) produced a citizen's stored priority score.
+ * Its own comment even disagreed with its own code (comment said "50%
+ * location / 40% image", code used 60/40). There is now exactly one
+ * formula, defined in services/priorityConfig.js and used everywhere
+ * (final submission, /calculate-priority preview, and
+ * /api/location-priority/comprehensive all call it). If it genuinely can't
+ * run (no location data, or the calculation throws), this returns an
+ * honestly-labeled category-tier-only estimate instead of silently
+ * recomputing with different weights.
+ */
 async function calculateComprehensivePriority({ imageValidation, locationData, category, description }) {
   const startTime = Date.now();
-  
-  try {
-    
-    // Skip slow Google Places API calls if key is not configured
-    // Without the key, LocationPriorityService retries dozens of calls with exponential backoff,
-    // causing 30-60+ second hangs before falling back anyway
-    if (!process.env.GOOGLE_PLACES_API_KEY) {
-      console.log(' Google Places API key not configured - using fast fallback priority');
-      const fallbackScore = getFallbackPriority(category);
-      const imageScore = imageValidation?.confidence || imageValidation?.modelConfidence || 0;
-      const totalScore = Math.min((fallbackScore * 0.6) + (imageScore * 0.4), 0.999);
-      
-      return {
-        totalScore,
-        priorityLevel: totalScore >= 0.8 ? 'CRITICAL' : totalScore >= 0.6 ? 'HIGH' : totalScore >= 0.4 ? 'MEDIUM' : 'LOW',
-        locationScore: 0,
-        imageScore,
-        reasoning: `Priority assigned based on complaint type (${category}). Location analysis unavailable (Google Places API not configured).`,
-        facilitiesCount: 0,
-        processingTime: Date.now() - startTime,
-        breakdown: {
-          infrastructureScore: 0,
-          imageValidationScore: imageScore,
-          ageScore: 1.0,
-          voteScore: 0,
-          statusMultiplier: 1.0
-        }
-      };
-    }
-    
-    let priorityResult = null;
-    
-    
-    if (locationData && locationData.latitude && locationData.longitude) {
-      try {
-       
-        priorityResult = await locationPriorityService.calculateComprehensivePriority(
-          locationData.latitude,
-          locationData.longitude,
-          imageValidation || {},
-          {
-            complaintType: category,
-            created_at: new Date().toISOString(),
-            status: 'pending',
-            votes: 0,
-            locationMeta: {
-              privacyLevel: locationData.privacyLevel,
-              radiusM: locationData.accuracy,
-              precision: locationData.precision,
-              description: locationData.description
-            }
-          }
-        );
-        
-        console.log('New priority calculation result:', priorityResult);
-        
-        return {
-          totalScore: priorityResult.priorityScore,
-          priorityLevel: priorityResult.priorityLevel,
-          locationScore: priorityResult.breakdown.infrastructureScore,
-          imageScore: priorityResult.breakdown.imageValidationScore,
-          reasoning: priorityResult.reasoning,
-          facilitiesCount: priorityResult.totalFacilities || 0,
-          processingTime: Date.now() - startTime,
-          breakdown: priorityResult.breakdown
-        };
-      } catch (priorityErr) {
-        console.error('New priority calculation error:', priorityErr);
-        // Fall back to original calculation
+
+  const categoryOnlyFallback = (reason) => {
+    const fallbackScore = priorityConfig.getFallbackPriorityScore(category);
+    return {
+      totalScore: fallbackScore,
+      priorityLevel: priorityConfig.getPriorityLevel(fallbackScore),
+      locationScore: 0,
+      imageScore: imageValidation?.data?.priorityScore || imageValidation?.confidence || 0,
+      reasoning: `${reason} Priority assigned from complaint category "${category}" (${priorityConfig.getCategoryImportanceLabel(category)}) only.`,
+      facilitiesCount: 0,
+      processingTime: Date.now() - startTime,
+      breakdown: {
+        infrastructureScore: 0,
+        imageValidationScore: imageValidation?.data?.priorityScore || imageValidation?.confidence || 0,
+        emotionScore: 0,
+        voteScore: 0,
+        statusMultiplier: 1.0,
+        degraded: true
       }
-    }
-    
-    // Fallback to original calculation if new method fails
-    
-    // 1. Location-based priority (50% weight)
-    let locationPriority = null;
-    let locationScore = 0;
-    
-    if (locationData) {
-      locationPriority = await locationPriorityService.calculateLocationPriority(
-        locationData.latitude,
-        locationData.longitude,
-        category,
-        {
+    };
+  };
+
+  if (!locationData || !locationData.latitude || !locationData.longitude) {
+    return categoryOnlyFallback('No location data provided.');
+  }
+
+  try {
+    const priorityResult = await locationPriorityService.calculateComprehensivePriority(
+      locationData.latitude,
+      locationData.longitude,
+      imageValidation || {},
+      {
+        complaintType: category,
+        created_at: new Date().toISOString(),
+        status: 'pending',
+        votes: 0,
+        description,
+        locationMeta: {
           privacyLevel: locationData.privacyLevel,
-          radiusM: locationData.radiusM,
+          radiusM: locationData.accuracy,
           precision: locationData.precision,
           description: locationData.description
         }
-      );
-      locationScore = locationPriority.priorityScore || 0;
-    }
-    
-    // 2. Image-based priority (40% weight)
-    const imageScore = imageValidation?.data?.priorityScore || 0;
-    
-    // 3. Calculate weighted total score
-    const totalScore = (locationScore * 0.6) + (imageScore * 0.4);
-    
-    // 4. Determine priority level
-    let priorityLevel = 'LOW';
-    if (totalScore >= 0.8) priorityLevel = 'CRITICAL';
-    else if (totalScore >= 0.6) priorityLevel = 'HIGH';
-    else if (totalScore >= 0.4) priorityLevel = 'MEDIUM';
-    
-    // 5. Generate reasoning
-    const reasoning = generatePriorityReasoning({
-      locationScore,
-      imageScore,
-      totalScore,
-      priorityLevel,
-      category,
-      locationPriority,
-      imageValidation
-    });
-    
-    const processingTime = Date.now() - startTime;
-    
-    return {
-      totalScore,
-      priorityLevel,
-      locationScore,
-      imageScore,
-      reasoning,
-      facilitiesCount: locationPriority?.totalFacilities || 0,
-      processingTime,
-      breakdown: {
-        infrastructureScore: locationScore,
-        imageValidationScore: imageScore,
-        ageScore: 1.0, // Default for new complaint
-        voteScore: 0,
-        statusMultiplier: 1.0
       }
-    };
-    
-  } catch (error) {
-    console.error(' Priority calculation error:', error);
-    
-    // Fallback priority based on complaint category
-    const fallbackScore = getFallbackPriority(category);
-    
+    );
+
+    console.log('✅ Priority calculation result:', priorityResult);
+
     return {
-      totalScore: Math.min(fallbackScore, 0.999),
-      priorityLevel: fallbackScore >= 0.6 ? 'HIGH' : 'MEDIUM',
-      locationScore: 0,
-      imageScore: imageValidation?.data?.priorityScore || 0,
-      reasoning: `Priority assigned based on complaint type (${category}). Location analysis unavailable.`,
-      facilitiesCount: 0,
-      processingTime: Date.now() - startTime
+      totalScore: priorityResult.priorityScore,
+      priorityLevel: priorityResult.priorityLevel,
+      locationScore: priorityResult.breakdown.infrastructureScore,
+      imageScore: priorityResult.breakdown.imageValidationScore,
+      reasoning: priorityResult.reasoning,
+      facilitiesCount: priorityResult.totalFacilities || 0,
+      processingTime: Date.now() - startTime,
+      breakdown: priorityResult.breakdown
     };
+  } catch (priorityErr) {
+    console.error('❌ Priority calculation error, using category-tier fallback:', priorityErr);
+    return categoryOnlyFallback(`Priority calculation service unavailable (${priorityErr.message}).`);
   }
 }
 
-/**
- * Generate priority reasoning explanation
- */
-function generatePriorityReasoning({ locationScore, imageScore, totalScore, priorityLevel, category, locationPriority, imageValidation }) {
-  let reasoning = `${priorityLevel} priority assigned. `;
-  
-  // Location component
-  if (locationScore > 0) {
-    reasoning += `Location analysis: ${(locationScore * 100).toFixed(1)}% `;
-    if (locationPriority?.reasoning) {
-      reasoning += `(${locationPriority.reasoning.substring(0, 100)}...) `;
-    }
-  }
-  
-  // Image component
-  if (imageScore > 0) {
-    reasoning += `Image validation: ${(imageScore * 100).toFixed(1)}% `;
-    if (imageValidation?.allowUpload) {
-      reasoning += `(Valid civic issue detected) `;
-    }
-  }
-  
-  // Category-based component
-  reasoning += `Category '${category}' is considered ${getCategoryImportance(category)}. `;
-  
-  return reasoning;
-}
-
-/**
- * Get fallback priority score based on complaint category
- */
-function getFallbackPriority(category) {
-  const categoryPriorities = {
-    'road_damage': 0.7,
-    'pothole': 0.65,
-    'water_issue': 0.8,
-    'sewage_overflow': 0.85,
-    'garbage': 0.6,
-    'streetlight': 0.55,
-    'broken_streetlight': 0.6,
-    'electricity': 0.75,
-    'public_property_damage': 0.65,
-    'tree_issue': 0.5,
-    'flooding': 0.9,
-    'traffic_signal': 0.8,
-    'stray_animals': 0.4,
-    'noise_pollution': 0.4,
-    'air_pollution': 0.7,
-    'other': 0.5
-  };
-  
-  return categoryPriorities[category] || 0.5;
-}
-
-/**
- * Get category importance level for priority reasoning
- */
-function getCategoryImportance(category) {
-  const categoryImportance = {
-    'road_damage': 'high-priority',
-    'pothole': 'high-priority',
-    'water_issue': 'critical',
-    'sewage_overflow': 'critical',
-    'garbage': 'medium-priority',
-    'streetlight': 'medium-priority',
-    'broken_streetlight': 'medium-priority',
-    'electricity': 'high-priority',
-    'public_property_damage': 'high-priority',
-    'tree_issue': 'medium-priority',
-    'flooding': 'critical',
-    'traffic_signal': 'high-priority',
-    'stray_animals': 'standard',
-    'noise_pollution': 'standard',
-    'air_pollution': 'high-priority',
-    'other': 'standard'
-  };
-  
-  return categoryImportance[category] || 'standard';
-}
+// NOTE: this file used to also define generatePriorityReasoning(),
+// getFallbackPriority(), getCategoryImportance(), and getPriorityLevelFromScore()
+// -- a THIRD independent category->score/label table (after
+// EmotionAnalysisService's ~30-category multiplier table and this app's own
+// 8-class taxonomy), several of whose category names couldn't even occur in
+// this app. All four are now provided by services/priorityConfig.js
+// (getFallbackPriorityScore, getCategoryImportanceLabel, getPriorityLevel)
+// and used directly at each call site, so there is exactly one category ->
+// tier mapping in the codebase.
 
 /**
  * Generate next steps based on priority level and category
@@ -669,14 +696,14 @@ function generateNextSteps(priorityLevel, category) {
 
   if (priorityLevel === 'CRITICAL') {
     return [
-      ' Your complaint has been marked as CRITICAL priority.',
+      '🚨 Your complaint has been marked as CRITICAL priority.',
       'An urgent response team will be notified immediately.',
       'Expect a response within 24 hours.',
       'You can track real-time updates in your dashboard.'
     ];
   } else if (priorityLevel === 'HIGH') {
     return [
-      ' Your complaint has been marked as HIGH priority.',
+      '⚠️ Your complaint has been marked as HIGH priority.',
       'It will be reviewed by municipal staff within 48 hours.',
       'You will receive updates when your complaint status changes.',
       'Local authorities have been notified about this issue.'
@@ -730,7 +757,7 @@ router.get('/', async (req, res) => {
     
     // Apply location-based filtering if latitude, longitude, and radius are provided
     if (latitude && longitude && radius) {
-      console.log(` Filtering complaints by location: lat=${latitude}, lng=${longitude}, radius=${radius}m`);
+      console.log(`🌎 Filtering complaints by location: lat=${latitude}, lng=${longitude}, radius=${radius}m`);
       
       // Calculate the approximate distance in degrees for the radius
       const radiusInDegrees = parseFloat(radius) / 111000; // 1 degree is approximately 111km
@@ -791,7 +818,7 @@ router.get('/', async (req, res) => {
     
     // Log the vote counts to help with debugging
     if (data) {
-      console.log(` Returning ${data.length} complaints with vote counts:`, 
+      console.log(`📊 Returning ${data.length} complaints with vote counts:`, 
         data.map(c => ({id: c.id, votes: c.vote_count || 0, userVoted: c.userVoted || false}))
       );
     }
@@ -821,7 +848,7 @@ router.get('/', async (req, res) => {
  */
 router.get('/all', async (req, res) => {
   try {
-    console.log(' Fetching all complaints');
+    console.log('📋 Fetching all complaints');
     
     const { data, error } = await supabase
       .from('complaints')
@@ -832,7 +859,7 @@ router.get('/all', async (req, res) => {
       throw new Error(error.message);
     }
     
-    console.log(` Successfully fetched ${data.length} complaints`);
+    console.log(`✅ Successfully fetched ${data.length} complaints`);
     
     res.json({
       success: true,
@@ -851,7 +878,7 @@ router.get('/all', async (req, res) => {
 router.get('/personal-reports', async (req, res) => {
   try {
     const userId = req.user?.id;
-    console.log(' Getting personal reports for user ID:', userId);
+    console.log('🔍 Getting personal reports for user ID:', userId);
 
     if (!userId) {
       return res.status(401).json({
@@ -904,7 +931,7 @@ router.get('/personal-reports', async (req, res) => {
           status: 'completed',
           date: complaint.created_at,
           description: 'Your complaint has been received and is being reviewed',
-          icon: ''
+          icon: '📝'
         },
         {
           id: 2,
@@ -913,7 +940,7 @@ router.get('/personal-reports', async (req, res) => {
                  workflow?.step_1_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_1_timestamp,
           description: 'Our team is reviewing your complaint for validity and priority',
-          icon: '',
+          icon: '🔍',
           officer: workflow?.step_1_officer_id ? 'Assigned to officer' : null
         },
         {
@@ -923,7 +950,7 @@ router.get('/personal-reports', async (req, res) => {
                  workflow?.step_2_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_2_timestamp,
           description: 'Field assessment and resource planning in progress',
-          icon: '',
+          icon: '📋',
           officer: workflow?.step_2_officer_id ? 'Officer assigned' : null,
           estimatedCost: workflow?.step_2_estimated_cost
         },
@@ -934,7 +961,7 @@ router.get('/personal-reports', async (req, res) => {
                  workflow?.step_3_status === 'in_progress' ? 'in_progress' : 'pending',
           date: workflow?.step_3_timestamp,
           description: 'Resolution work is being carried out',
-          icon: '',
+          icon: '🔧',
           contractor: workflow?.step_3_contractor_id ? 'Contractor assigned' : null,
           startDate: workflow?.step_3_start_date
         },
@@ -944,7 +971,7 @@ router.get('/personal-reports', async (req, res) => {
           status: complaint.status === 'resolved' ? 'completed' : 'pending',
           date: workflow?.step_3_completion_date || (complaint.status === 'resolved' ? complaint.updated_at : null),
           description: complaint.status === 'resolved' ? 'Issue has been resolved successfully' : 'Awaiting completion',
-          icon: complaint.status === 'resolved' ? '' : '',
+          icon: complaint.status === 'resolved' ? '✅' : '⏳',
           photos: workflow?.step_3_completion_photos
         }
       ];
@@ -966,7 +993,7 @@ router.get('/personal-reports', async (req, res) => {
       cancelled: complaints?.filter(c => c.status === 'cancelled').length || 0
     };
 
-    console.log(' Personal reports fetched successfully:', stats);
+    console.log('✅ Personal reports fetched successfully:', stats);
 
     res.json({
       success: true,
@@ -1000,7 +1027,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    console.log(` Fetching complaint details for ID: ${complaintId}`);
+    console.log(`🔍 Fetching complaint details for ID: ${complaintId}`);
 
     // Get complaint details
     const { data: complaint, error } = await supabase
@@ -1017,7 +1044,7 @@ router.get('/:id', async (req, res) => {
       .single();
 
     if (error) {
-      console.error(' Error fetching complaint:', error);
+      console.error('❌ Error fetching complaint:', error);
       return res.status(404).json({ 
         success: false, 
         message: 'Complaint not found' 
@@ -1030,6 +1057,21 @@ router.get('/:id', async (req, res) => {
         message: 'Complaint not found' 
       });
     }
+
+    if (!complaint.users && complaint.user_id) {
+      const { data: u } = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .eq('id', complaint.user_id)
+        .single();
+      if (u) complaint.users = u;
+    }
+
+    const citizenFullName = complaint.users?.full_name || complaint.user_name || 'Verified Citizen';
+    complaint.users = complaint.users || { full_name: citizenFullName, email: complaint.users?.email };
+    complaint.user = complaint.users;
+    complaint.user_name = citizenFullName;
+    complaint.citizenName = citizenFullName;
 
     // Vote count is already available in complaints table (complaint.vote_count)
     const voteCount = complaint.vote_count || 0;
@@ -1052,14 +1094,14 @@ router.get('/:id', async (req, res) => {
     complaint.vote_count = voteCount;
     complaint.userVoted = userVoted;
 
-    console.log(` Found complaint: ${complaint.title} with ${voteCount} votes`);
+    console.log(`✅ Found complaint: ${complaint.title} with ${voteCount} votes`);
 
     res.json({
       success: true,
       complaint: complaint
     });
   } catch (error) {
-    console.error(' Get complaint error:', error);
+    console.error('❌ Get complaint error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -1078,161 +1120,58 @@ router.post('/vote', async (req, res) => {
   try {
     // Check for authenticated user
     if (!req.user) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Authentication required to vote on complaints' 
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required to vote on complaints'
       });
     }
 
     const { complaintId } = req.body;
     const userId = req.user.id;
 
-    console.log(` Processing toggle vote request:`, req.body);
-    
+    console.log('🗳️ Processing toggle vote request:', req.body);
+
     if (!complaintId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid request. Required: complaintId' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request. Required: complaintId'
       });
     }
 
     // First check if the complaint exists
     const { data: complaint, error: complaintError } = await supabase
       .from('complaints')
-      .select('*')
+      .select('id')
       .eq('id', complaintId)
       .single();
 
     if (complaintError || !complaint) {
-      console.error(' Complaint not found:', complaintError || 'No data returned');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Complaint not found' 
+      console.error('❌ Complaint not found:', complaintError || 'No data returned');
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found'
       });
     }
 
-    // Check if user already voted for this complaint
-    const { data: existingVote, error: voteError } = await supabase
-      .from('complaint_votes')
-      .select('*')
-      .eq('complaint_id', complaintId)
-      .eq('user_id', userId)
-      .single();
+    // See services/voteService.js - also recomputes and persists
+    // complaints.vote_count from complaint_votes, which this endpoint used
+    // to never do (it only mutated complaint_votes, so the visible count
+    // never moved even though the vote itself was correctly recorded).
+    const { action, userVoted, voteCount } = await toggleUpvote(supabase, complaintId, { userId });
 
-    if (voteError && voteError.code !== 'PGRST116') { // PGRST116 = no rows returned
-      console.error(' Error checking existing vote:', voteError);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Error checking vote status' 
-      });
-    }
-
-    let result;
-
-    // Process vote with simple upvote/downvote toggle logic
-    if (!existingVote) {
-      // User hasn't voted yet - add upvote
-      console.log(' Adding new upvote for user');
-      const { data: newVote, error: insertError } = await supabase
-        .from('complaint_votes')
-        .insert([
-          { 
-            complaint_id: complaintId, 
-            user_id: userId,
-            vote_type: 'upvote'
-          }
-        ])
-        .select();
-
-      if (insertError) {
-        console.error(' Error adding vote:', insertError);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Failed to add vote',
-          details: insertError.message
-        });
-      }
-
-      result = newVote[0];
-      result.action = 'voted';
-      console.log(' Vote added successfully');
-      
-    } else {
-      // User has already voted - toggle the vote
-      if (existingVote.vote_type === 'upvote') {
-        // Currently upvoted - DELETE the vote record completely (don't create downvote)
-        console.log(' Removing upvote (deleting vote record)');
-        const { error: deleteError } = await supabase
-          .from('complaint_votes')
-          .delete()
-          .eq('complaint_id', complaintId)
-          .eq('user_id', userId);
-
-        if (deleteError) {
-          console.error(' Error deleting vote:', deleteError);
-          return res.status(500).json({ 
-            success: false, 
-            message: 'Failed to remove vote',
-            details: deleteError.message
-          });
-        }
-
-        result = { vote_type: null, action: 'unvoted' };
-        console.log(' Vote deleted successfully');
-        
-      } else {
-        // Currently has downvote or other vote type - change to upvote
-        console.log(' Changing to upvote');
-        const { data: updatedVote, error: updateError } = await supabase
-          .from('complaint_votes')
-          .update({ 
-            vote_type: 'upvote'
-          })
-          .eq('complaint_id', complaintId)
-          .eq('user_id', userId)
-          .select();
-
-        if (updateError) {
-          console.error(' Error updating to upvote:', updateError);
-          return res.status(500).json({ 
-            success: false, 
-            message: 'Failed to add vote',
-            details: updateError.message
-          });
-        }
-
-        result = updatedVote[0];
-        result.action = 'voted';
-        console.log(' Vote updated to upvote successfully');
-      }
-    }
-
-    // Get updated vote count directly from complaints table (more efficient)
-    const { data: complaintData, error: countError } = await supabase
-      .from('complaints')
-      .select('vote_count')
-      .eq('id', complaintId)
-      .single();
-
-    const voteCount = countError ? 0 : (complaintData?.vote_count || 0);
-
-    // Determine user voted status based on the result
-    const userVoted = result.vote_type === 'upvote';
-    
-    // Return the updated vote information
-    const message = result.action === 'voted' ? 'Vote added successfully' : 'Vote removed successfully';
     return res.status(200).json({
       success: true,
-      message: message,
+      message: action === 'voted' ? 'Vote added successfully' : 'Vote removed successfully',
       data: {
-        ...result,
-        voteCount: voteCount,
-        userVoted: userVoted
+        complaint_id: complaintId,
+        action,
+        userVoted,
+        voteCount
       }
     });
-    
+
   } catch (error) {
-    console.error(' Vote processing error:', error);
+    console.error('❌ Vote processing error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while processing vote'
@@ -1278,7 +1217,7 @@ router.get('/vote/status', async (req, res) => {
       .eq('vote_type', 'upvote'); // Only consider upvotes
 
     if (error) {
-      console.error(' Error fetching vote status:', error);
+      console.error('❌ Error fetching vote status:', error);
       return res.status(500).json({ 
         success: false, 
         message: 'Error fetching vote status' 
@@ -1301,7 +1240,7 @@ router.get('/vote/status', async (req, res) => {
     });
     
   } catch (error) {
-    console.error(' Vote status error:', error);
+    console.error('❌ Vote status error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error while getting vote status'
@@ -1323,7 +1262,7 @@ router.post('/create', async (req, res) => {
  */
 router.post('/calculate-priority', async (req, res) => {
   try {
-    console.log(' Pre-submission priority calculation request:', req.body);
+    console.log('🧮 Pre-submission priority calculation request:', req.body);
     
     const {
       category,
@@ -1382,5 +1321,3 @@ router.post('/calculate-priority', async (req, res) => {
 });
 
 module.exports = router;
-
-

@@ -1,6 +1,7 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const LocationPriorityService = require('../services/LocationPriorityService');
+const priorityConfig = require('../services/priorityConfig');
 
 // Initialize the location priority service
 const locationPriorityService = new LocationPriorityService();
@@ -24,14 +25,14 @@ const locationPriorityService = new LocationPriorityService();
  */
 router.post('/calculate', async (req, res) => {
   try {
-    console.log(' Location priority calculation request:', req.body);
+    console.log('🔍 Location priority calculation request:', req.body);
     
     const { latitude, longitude, complaintType, locationMeta } = req.body;
     
     // Input validation
     const validationResult = validateCalculationInput(req.body);
     if (!validationResult.isValid) {
-      console.log(' Validation failed:', validationResult.error);
+      console.log('❌ Validation failed:', validationResult.error);
       return res.status(400).json({
         success: false,
         error: validationResult.error,
@@ -39,7 +40,7 @@ router.post('/calculate', async (req, res) => {
         timestamp: new Date().toISOString()
       });
     }
-    console.log(' Validation passed for complaint type:', complaintType);
+    console.log('✅ Validation passed for complaint type:', complaintType);
     
     // Calculate location priority score
     const startTime = Date.now();
@@ -53,9 +54,9 @@ router.post('/calculate', async (req, res) => {
         locationMeta
       );
       processingTime = Date.now() - startTime;
-      console.log(` Priority calculation completed in ${processingTime}ms`);
+      console.log(`✅ Priority calculation completed in ${processingTime}ms`);
     } catch (calculationError) {
-      console.error(' Priority calculation error:', calculationError);
+      console.error('❌ Priority calculation error:', calculationError);
       return res.status(400).json({
         success: false,
         error: 'Priority calculation failed: ' + calculationError.message,
@@ -111,7 +112,7 @@ router.post('/calculate', async (req, res) => {
     res.json(response);
     
   } catch (error) {
-    console.error(' Location priority calculation error:', error);
+    console.error('❌ Location priority calculation error:', error);
     handleCalculationError(error, res);
   }
 });
@@ -196,7 +197,7 @@ router.post('/calculate-bulk', async (req, res) => {
     });
     
   } catch (error) {
-    console.error(' Bulk calculation error:', error);
+    console.error('❌ Bulk calculation error:', error);
     res.status(500).json({
       success: false,
       error: 'Bulk calculation failed',
@@ -212,7 +213,7 @@ router.post('/calculate-bulk', async (req, res) => {
 router.get('/info', (req, res) => {
   res.json({
     service: {
-      name: 'UrbanPulse Location Priority Assessment',
+      name: 'CivicStack Location Priority Assessment',
       version: '2.1.0',
       description: 'AI-powered location analysis for civic complaint prioritization',
       status: 'operational'
@@ -228,39 +229,39 @@ router.get('/info', (req, res) => {
     ],
     privacyLevels: {
       exact: {
-        description: 'Level 1: Exact coordinates (5-10m) for urgent infrastructure issues',
+        description: 'Level 1: Exact coordinates (±5-10m) for urgent infrastructure issues',
         accuracy: '5-10 meters',
-        useCases: ['Emergency gas leaks', 'Electrical hazards', 'Fire safety', 'Medical emergencies'],
-        recommended: ['fire_hazard', 'electrical_danger', 'sewage_overflow']
+        useCases: ['Fallen electric poles/lines', 'Structural damage', 'Road waterlogging'],
+        recommended: ['fallen_electric_pole', 'concrete_structure_damage', 'road_waterlogging']
       },
       street: {
-        description: 'Level 2: Street-level accuracy (25m) for general civic complaints',
-        accuracy: '20-30 meters', 
-        useCases: ['Road maintenance', 'Streetlight issues', 'General infrastructure'],
-        recommended: ['pothole', 'broken_streetlight', 'traffic_signal', 'garbage_collection']
+        description: 'Level 2: Street-level accuracy (±25m) for general civic complaints',
+        accuracy: '20-30 meters',
+        useCases: ['Potholes', 'Fallen trees', 'Garbage dumping', 'General infrastructure'],
+        recommended: ['pothole', 'fallen_tree', 'garbage_dumping']
       },
       area: {
-        description: 'Level 3: Neighborhood-level (150m) for privacy-conscious reporting',
+        description: 'Level 3: Neighborhood-level (±150m) for privacy-conscious reporting',
         accuracy: '100-200 meters',
         useCases: ['General area complaints', 'Privacy-sensitive reports'],
-        recommended: ['noise_complaint', 'general_maintenance']
+        recommended: ['stray_cattle', 'others']
       }
     },
     complaintTypes: {
       urgent: {
-        types: ['fire_hazard', 'electrical_danger', 'sewage_overflow', 'water_main_break'],
+        types: ['fallen_electric_pole', 'road_waterlogging'],
         multiplier: 1.5,
         recommendedPrivacy: 'exact',
         description: 'Critical infrastructure issues requiring immediate response'
       },
       safety: {
-        types: ['pothole', 'broken_streetlight', 'traffic_signal', 'road_damage'],
+        types: ['pothole', 'concrete_structure_damage', 'fallen_tree'],
         multiplier: 1.2,
         recommendedPrivacy: 'street',
         description: 'Safety-related issues affecting public welfare'
       },
       general: {
-        types: ['garbage_collection', 'water_leakage', 'noise_complaint', 'illegal_parking', 'others'],
+        types: ['garbage_dumping', 'stray_cattle', 'others'],
         multiplier: 1.0,
         recommendedPrivacy: 'street',
         description: 'General civic maintenance and quality of life issues'
@@ -286,10 +287,16 @@ router.get('/info', (req, res) => {
         color: '#FFAA00'
       },
       LOW: {
-        range: '0.0-0.4',
+        range: '0.2-0.4',
         description: 'Lower priority - routine maintenance',
         responseTime: '< 1 week',
         color: '#888888'
+      },
+      MINIMAL: {
+        range: '0.0-0.2',
+        description: 'Minimal priority - schedule as resources permit',
+        responseTime: 'best effort',
+        color: '#CCCCCC'
       }
     },
     apiLimits: {
@@ -324,7 +331,7 @@ router.get('/health', async (req, res) => {
   
   try {
     // Test Google Places API connectivity
-    console.log(' Running health check...');
+    console.log('🏥 Running health check...');
     const testStartTime = Date.now();
     
     const testResult = await locationPriorityService.calculateLocationPriority(
@@ -357,7 +364,7 @@ router.get('/health', async (req, res) => {
     res.status(200).json(healthData);
     
   } catch (error) {
-    console.error(' Health check failed:', error);
+    console.error('❌ Health check failed:', error);
     
     healthData.status = 'unhealthy';
     healthData.checks = {
@@ -403,8 +410,8 @@ router.get('/metrics', (req, res) => {
     usage: {
       topComplaintTypes: [
         { type: 'pothole', count: 0 },
-        { type: 'broken_streetlight', count: 0 },
-        { type: 'garbage_collection', count: 0 }
+        { type: 'garbage_dumping', count: 0 },
+        { type: 'fallen_tree', count: 0 }
       ],
       privacyLevelDistribution: {
         exact: '15%',
@@ -422,12 +429,12 @@ router.get('/metrics', (req, res) => {
  * Validate input for location priority calculation
  */
 function validateCalculationInput(input) {
-  console.log(' Validating input:', JSON.stringify(input, null, 2));
+  console.log('🔍 Validating input:', JSON.stringify(input, null, 2));
   const { latitude, longitude, complaintType, locationMeta } = input;
   
   // Required fields validation
   if (!latitude || !longitude) {
-    console.log(' Missing coordinates validation failed');
+    console.log('❌ Missing coordinates validation failed');
     return {
       isValid: false,
       error: 'Latitude and longitude are required',
@@ -436,7 +443,7 @@ function validateCalculationInput(input) {
   }
   
   if (!complaintType) {
-    console.log(' Missing complaint type validation failed');
+    console.log('❌ Missing complaint type validation failed');
     return {
       isValid: false,
       error: 'Complaint type is required',
@@ -472,17 +479,18 @@ function validateCalculationInput(input) {
     };
   }
   
-  // Complaint type validation
+  // Complaint type validation - kept in sync with the civic issue classes the
+  // CityZen SAM3 image workflow can detect (services/imageAnalysisService.js
+  // CIVIC_ISSUE_LABELS on the backend).
   const validComplaintTypes = [
-    'fire_hazard', 'electrical_danger', 'sewage_overflow',
-    'pothole', 'broken_streetlight', 'traffic_signal', 'garbage_collection',
-    'water_leakage', 'road_damage', 'noise_complaint', 'illegal_parking',
+    'pothole', 'fallen_tree', 'garbage_dumping', 'stray_cattle',
+    'fallen_electric_pole', 'concrete_structure_damage', 'road_waterlogging',
     'others'
   ];
   
-  console.log(' Checking complaint type:', complaintType, 'in valid types:', validComplaintTypes);
+  console.log('🔍 Checking complaint type:', complaintType, 'in valid types:', validComplaintTypes);
   if (!validComplaintTypes.includes(complaintType)) {
-    console.log(' Invalid complaint type validation failed');
+    console.log('❌ Invalid complaint type validation failed');
     return {
       isValid: false,
       error: `Invalid complaint type. Supported types: ${validComplaintTypes.join(', ')}`,
@@ -514,13 +522,13 @@ function validateCalculationInput(input) {
 }
 
 /**
- * Determine priority level based on numerical score
+ * Determine priority level based on numerical score. Delegates to
+ * services/priorityConfig.js so this file, LocationPriorityService, and
+ * routes/complaints.js all use the exact same thresholds (previously this
+ * used a different 4-band scale than LocationPriorityService's 5-band one).
  */
 function determinePriorityLevel(score) {
-  if (score >= 0.8) return 'CRITICAL';
-  if (score >= 0.6) return 'HIGH';
-  if (score >= 0.4) return 'MEDIUM';
-  return 'LOW';
+  return priorityConfig.getPriorityLevel(score);
 }
 
 /**
@@ -597,7 +605,7 @@ function handleCalculationError(error, res) {
  */
 router.post('/comprehensive', async (req, res) => {
   try {
-    console.log(' Comprehensive priority calculation request:', req.body);
+    console.log('🧠 Comprehensive priority calculation request:', req.body);
     
     const { 
       latitude, 
@@ -640,7 +648,7 @@ router.post('/comprehensive', async (req, res) => {
     );
     const processingTime = Date.now() - startTime;
     
-    console.log(` Comprehensive priority calculation completed in ${processingTime}ms`);
+    console.log(`✅ Comprehensive priority calculation completed in ${processingTime}ms`);
     
     // Format response
     const response = {
@@ -702,5 +710,3 @@ router.post('/comprehensive', async (req, res) => {
 });
 
 module.exports = router;
-
-

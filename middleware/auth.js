@@ -1,4 +1,4 @@
-﻿const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const { supabase } = require('../config/supabase');
 
 /**
@@ -15,41 +15,24 @@ const authenticateUser = async (req, res, next) => {
     
     // If no token, continue as anonymous user
     if (!token) {
-      console.log(' No authentication token provided');
       req.user = null;
       return next();
     }
     
-    // Verify token
+    // Verify token - this is fast (no DB call)
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Check if user exists and is active
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, email, full_name, user_type, is_active')
-      .eq('id', decoded.userId)
-      .eq('is_active', true)
-      .single();
-    
-    if (error || !user) {
-      console.log(' User not found or inactive:', decoded.userId);
-      req.user = null;
-      return next();
-    }
-    
-    // Attach user to request
+    // Attach user to request directly from token
     req.user = {
-      id: user.id,
-      email: user.email,
-      fullName: user.full_name,
-      userType: user.user_type,
+      id: decoded.userId,
+      email: decoded.email,
+      userType: decoded.userType,
       isAuthenticated: true
     };
     
-    console.log(` Authenticated user: ${user.email} (${user.id})`);
     next();
   } catch (error) {
-    console.log(' Authentication error:', error.message);
+    // Invalid token - continue as anonymous
     req.user = null;
     next();
   }
@@ -85,4 +68,3 @@ module.exports = {
   authenticateUser,
   authorizeUserType
 };
-

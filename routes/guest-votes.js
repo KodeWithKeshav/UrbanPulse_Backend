@@ -1,316 +1,90 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
-const crypto = require('crypto');
+const { toggleUpvote } = require('../services/voteService');
+const { deviceIdColumnAvailable } = require('../services/schemaAvailability');
 
 /**
- * Generate a deterministic UUID for guest users based on device ID
- * This ensures the same device always gets the same guest UUID
- */
-function generateGuestUUID(deviceId) {
-  const hash = crypto.createHash('md5').update('guest_' + deviceId).digest('hex');
-  // Format as UUID v4
-  const uuid = [
-    hash.substr(0, 8),
-    hash.substr(8, 4),
-    '4' + hash.substr(13, 3), // Version 4
-    ((parseInt(hash.substr(16, 1), 16) & 0x3) | 0x8).toString(16) + hash.substr(17, 3), // Variant bits
-    hash.substr(20, 12)
-  ].join('-');
-  return uuid;
-}
-
-/**
- * Guest voting endpoint - allows anonymous voting
+ * Guest voting endpoint - allows anonymous voting, deduped per-device once
+ * database/add_device_id_to_complaint_votes.sql has been run.
+ *
+ * This file previously defined this same POST '/' route twice - Express
+ * only ever reached the first (broken) definition, which inserted a new
+ * vote row and incremented vote_count unconditionally on every request:
+ * no duplicate protection, no way to undo a vote, and the vote_count
+ * arithmetic could drift under concurrent requests. The correctly-written
+ * second definition (with real per-device dedup) was unreachable dead
+ * code. Replaced with the one handler below, built on the shared
+ * services/voteService.js used by the authenticated vote endpoint too.
+ *
  * POST /api/guest-votes/
- * Body: { complaintId: string, deviceId: string (optional) }
- * 
- * Note: Since user_id can be NULL, we'll use NULL for guest votes
- * Device tracking will be done in the frontend for preventing multiple votes
+ * Body: { complaintId: string, deviceId?: string }
  */
 router.post('/', async (req, res) => {
   try {
-    console.log(' Processing guest vote request:', req.body);
-    
     const { complaintId, deviceId } = req.body;
-    
+
     if (!complaintId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Missing required parameter: complaintId' 
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameter: complaintId',
       });
     }
 
-    // First check if the complaint exists
     const { data: complaint, error: complaintError } = await supabase
       .from('complaints')
-      .select('id, vote_count')
+      .select('id')
       .eq('id', complaintId)
       .single();
 
     if (complaintError || !complaint) {
-      console.error(' Complaint not found:', complaintError || 'No data returned');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Complaint not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found',
       });
     }
 
-    // For guest voting, we'll simply add a vote with NULL user_id
-    // The frontend will handle preventing multiple votes from the same device
-    const { data: newVote, error: insertError } = await supabase
-      .from('complaint_votes')
-      .insert([
-        { 
-          complaint_id: complaintId, 
-          user_id: null, // Guest vote - no user association
-          vote_type: 'upvote',
-          created_at: new Date().toISOString()
-        }
-      ])
-      .select();
+    // Only dedupe by device once the column exists - otherwise fall back
+    // to the pre-migration behavior (every guest vote counts, no undo)
+    // rather than erroring on a missing column.
+    const canDedupe = deviceId && (await deviceIdColumnAvailable(supabase));
+    const identity = canDedupe ? { deviceId } : {};
 
-    if (insertError) {
-      console.error(' Error adding guest vote:', insertError);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Failed to add vote',
-        details: insertError.message
-      });
-    }
+    const { action, voteCount } = await toggleUpvote(supabase, complaintId, identity);
 
-    // Manually increment the vote count in complaints table
-    const { error: updateError } = await supabase
-      .from('complaints')
-      .update({ 
-        vote_count: (complaint.vote_count || 0) + 1 
-      })
-      .eq('id', complaintId);
-
-    if (updateError) {
-      console.error(' Error updating vote count:', updateError);
-      // We could rollback the vote insert here, but for simplicity we'll continue
-    }
-
-    console.log(' Guest vote added successfully');
-
-    // Get updated vote count
-    const { data: updatedComplaint, error: fetchError } = await supabase
-      .from('complaints')
-      .select('vote_count')
-      .eq('id', complaintId)
-      .single();
-
-    const finalVoteCount = fetchError ? (complaint.vote_count || 0) + 1 : (updatedComplaint.vote_count || 0);
-
-    // Return the updated vote information
     return res.status(200).json({
       success: true,
-      message: 'Vote added successfully',
+      message: action === 'voted' ? 'Vote added successfully' : 'Vote removed successfully',
       data: {
         complaint_id: complaintId,
-        vote_type: 'upvote',
-        voteCount: finalVoteCount,
-        isGuestVote: true
-      }
+        action,
+        userVoted: action === 'voted',
+        voteCount,
+        isGuestVote: true,
+        deduped: canDedupe,
+      },
     });
-    
   } catch (error) {
-    console.error(' Guest vote processing error:', error);
+    console.error('❌ Guest vote processing error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error while processing guest vote'
-    });
-  }
-});
-router.post('/', async (req, res) => {
-  try {
-    console.log(' Processing guest vote request:', req.body);
-    
-    const { complaintId, deviceId } = req.body;
-    
-    if (!complaintId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Missing required parameter: complaintId' 
-      });
-    }
-
-    // First check if the complaint exists
-    const { data: complaint, error: complaintError } = await supabase
-      .from('complaints')
-      .select('id, vote_count')
-      .eq('id', complaintId)
-      .single();
-
-    if (complaintError || !complaint) {
-      console.error(' Complaint not found:', complaintError || 'No data returned');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Complaint not found' 
-      });
-    }
-
-    // For guest voting, we'll use a simple approach with UUID-compatible guest IDs
-    let existingVote = null;
-    
-    if (deviceId) {
-      // Generate a deterministic UUID for this device
-      const guestUserId = generateGuestUUID(deviceId);
-      
-      // Check if this device already voted for this complaint
-      const { data: deviceVote, error: deviceVoteError } = await supabase
-        .from('complaint_votes')
-        .select('*')
-        .eq('complaint_id', complaintId)
-        .eq('user_id', guestUserId)
-        .single();
-
-      if (deviceVoteError && deviceVoteError.code !== 'PGRST116') {
-        console.error(' Error checking device vote:', deviceVoteError);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Error checking vote status' 
-        });
-      }
-
-      existingVote = deviceVote;
-    }
-
-    let result;
-    let message;
-
-    if (!existingVote) {
-      // No existing vote - add new guest vote
-      const guestUserId = deviceId ? generateGuestUUID(deviceId) : generateGuestUUID(`temp_${Date.now()}_${Math.random().toString(36).substring(2)}`);
-      
-      const { data: newVote, error: insertError } = await supabase
-        .from('complaint_votes')
-        .insert([
-          { 
-            complaint_id: complaintId, 
-            user_id: guestUserId, // Store guest UUID in user_id field
-            vote_type: 'upvote',
-            created_at: new Date().toISOString()
-          }
-        ])
-        .select();
-
-      if (insertError) {
-        console.error(' Error adding guest vote:', insertError);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Failed to add vote',
-          details: insertError.message
-        });
-      }
-
-      // Manually increment the vote count in complaints table
-      const { error: updateError } = await supabase
-        .from('complaints')
-        .update({ 
-          vote_count: complaint.vote_count + 1 
-        })
-        .eq('id', complaintId);
-
-      if (updateError) {
-        console.error(' Error updating vote count:', updateError);
-        // Note: We could rollback the vote insert here, but for simplicity we'll continue
-      }
-
-      result = newVote;
-      message = 'Vote added successfully';
-      console.log(' Guest vote added successfully');
-      
-    } else {
-      // Existing vote found - toggle it
-      const newVoteType = existingVote.vote_type === 'upvote' ? 'downvote' : 'upvote';
-      const voteCountChange = newVoteType === 'upvote' ? 1 : -1;
-
-      const { data: updatedVote, error: updateError } = await supabase
-        .from('complaint_votes')
-        .update({
-          vote_type: newVoteType,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingVote.id)
-        .select();
-
-      if (updateError) {
-        console.error(' Error updating guest vote:', updateError);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Failed to update vote' 
-        });
-      }
-
-      // Update the vote count in complaints table
-      const { error: countUpdateError } = await supabase
-        .from('complaints')
-        .update({ 
-          vote_count: Math.max(0, complaint.vote_count + voteCountChange)
-        })
-        .eq('id', complaintId);
-
-      if (countUpdateError) {
-        console.error(' Error updating vote count:', countUpdateError);
-      }
-
-      result = updatedVote;
-      message = newVoteType === 'upvote' ? 'Vote added successfully' : 'Vote removed successfully';
-      console.log(` Guest vote toggled to: ${newVoteType}`);
-    }
-
-    // Get updated vote count from complaints table
-    const { data: complaintData, error: countError } = await supabase
-      .from('complaints')
-      .select('vote_count')
-      .eq('id', complaintId)
-      .single();
-
-    const voteCount = countError ? 0 : (complaintData?.vote_count || 0);
-
-    // Return the updated vote information
-    return res.status(200).json({
-      success: true,
-      message,
-      data: {
-        complaint_id: complaintId,
-        vote_type: result?.[0]?.vote_type || 'upvote',
-        voteCount: complaint.vote_count + (message.includes('added') ? 1 : (message.includes('removed') ? -1 : 0)),
-        isGuestVote: true
-      }
-    });
-    
-  } catch (error) {
-    console.error(' Guest vote processing error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error while processing guest vote'
+      message: 'Internal server error while processing guest vote',
     });
   }
 });
 
 /**
- * Get vote status for a guest device
+ * Get vote status for a guest device.
  * GET /api/guest-votes/status/:complaintId?deviceId=xxx
- * 
- * Note: Since guest votes use NULL user_id, we can't track individual devices
- * This endpoint returns the total vote count for the complaint
+ * Reports the real per-device status once device_id is migrated;
+ * otherwise reports the complaint's total count with hasVoted always
+ * false, since pre-migration guest votes can't be traced back to a device.
  */
 router.get('/status/:complaintId', async (req, res) => {
   try {
     const { complaintId } = req.params;
     const { deviceId } = req.query;
-    
-    if (!complaintId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Missing complaintId parameter' 
-      });
-    }
 
-    // Get complaint vote count
     const { data: complaint, error: complaintError } = await supabase
       .from('complaints')
       .select('vote_count')
@@ -318,35 +92,43 @@ router.get('/status/:complaintId', async (req, res) => {
       .single();
 
     if (complaintError || !complaint) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Complaint not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found',
       });
     }
 
-    // Since we can't track individual guest votes, we'll return basic status
-    // The frontend will handle vote state management for guest users
+    let hasVoted = false;
+    const canDedupe = deviceId && (await deviceIdColumnAvailable(supabase));
+    if (canDedupe) {
+      const { data: vote } = await supabase
+        .from('complaint_votes')
+        .select('vote_type')
+        .eq('complaint_id', complaintId)
+        .eq('device_id', deviceId)
+        .maybeSingle();
+      hasVoted = vote?.vote_type === 'upvote';
+    }
+
     return res.status(200).json({
       success: true,
       data: {
         complaintId,
         voteCount: complaint.vote_count || 0,
         userVoteStatus: {
-          hasVoted: false, // Guest votes can't be tracked individually
-          voteType: null,
-          isActive: false
-        }
-      }
+          hasVoted,
+          voteType: hasVoted ? 'upvote' : null,
+          isActive: hasVoted,
+        },
+      },
     });
-    
   } catch (error) {
-    console.error(' Error getting guest vote status:', error);
+    console.error('❌ Error getting guest vote status:', error);
     return res.status(500).json({
       success: false,
-      message: 'Error retrieving vote status'
+      message: 'Error retrieving vote status',
     });
   }
 });
 
 module.exports = router;
-
