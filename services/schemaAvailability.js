@@ -15,6 +15,7 @@ const CHECK_TTL_MS = 60_000;
 
 let cache = { available: null, checkedAt: 0 };
 let deviceIdCache = { available: null, checkedAt: 0 };
+let languageCache = { available: null, checkedAt: 0 };
 
 async function geometryColumnsAvailable(supabase) {
   const now = Date.now();
@@ -69,4 +70,21 @@ const GEOMETRY_PLACEHOLDER = {
   geometry_computed_at: null,
 };
 
-module.exports = { geometryColumnsAvailable, GEOMETRY_PLACEHOLDER, deviceIdColumnAvailable };
+// Same probe-and-cache pattern, for complaints.language
+// (database/add_language_column_to_complaints.sql) -- lets routes that
+// explicitly SELECT a column list (routes/adminMinimal.js's priority queue)
+// include it once the migration has run, while degrading gracefully
+// beforehand.
+async function languageColumnAvailable(supabase) {
+  const now = Date.now();
+  if (languageCache.available !== null && now - languageCache.checkedAt < CHECK_TTL_MS) {
+    return languageCache.available;
+  }
+
+  const { error } = await supabase.from('complaints').select('language').limit(1);
+  const available = !error;
+  languageCache = { available, checkedAt: now };
+  return available;
+}
+
+module.exports = { geometryColumnsAvailable, GEOMETRY_PLACEHOLDER, deviceIdColumnAvailable, languageColumnAvailable };
