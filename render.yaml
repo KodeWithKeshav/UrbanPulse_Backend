@@ -29,6 +29,10 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: TYPESAFE_API_KEY
+        sync: false
+      - key: TYPESAFE_TIMEOUT_MS
+        value: 2500
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
@@ -41,6 +45,10 @@ services:
         value: https://nominatim.openstreetmap.org
       - key: OVERPASS_URL
         value: https://overpass-api.de/api/interpreter
+      - key: OVERPASS_FALLBACK_URLS
+        value: https://maps.mail.ru/osm/tools/overpass/api/interpreter
+      - key: OVERPASS_BUDGET_MS
+        value: 12000
       - key: OSRM_URL
         value: https://router.project-osrm.org
       - key: PLACES_SEARCH_RADIUS

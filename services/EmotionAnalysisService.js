@@ -1,5 +1,6 @@
 const axios = require('axios');
 const priorityConfig = require('./priorityConfig');
+const jevService = require('./TypeSafeJevService');
 
 /**
  * Enhanced Multilingual Emotion Analysis Service for CivicStack
@@ -540,8 +541,15 @@ class EmotionAnalysisService {
       let emotions = null;
       let analysisMethod = '';
 
+      // 0) TypeSafe Jev: one typed call (~70-500ms), any language. Returns
+      // null when TYPESAFE_API_KEY is unset or the call fails.
+      const jev = await jevService.analyzeComplaint({ text, translation });
+      if (jev) {
+        emotions = { ...jev.emotions };
+        analysisMethod = 'typesafe-jev';
+      }
       // For Tamil/Hindi text, use enhanced keyword analysis + English translation if available
-      if (language === 'ta' || language === 'hi') {
+      else if (language === 'ta' || language === 'hi') {
         console.log(`🌟 ${language === 'ta' ? 'Tamil' : 'Hindi'} text detected - using enhanced keyword analysis`);
         emotions = this.analyzeWithEnhancedKeywords(text, language);
         analysisMethod = `enhanced-keywords-${language === 'ta' ? 'tamil' : 'hindi'}`;

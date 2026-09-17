@@ -265,15 +265,9 @@ function analyzeTextAuthenticity({ text, category, imagePrimaryClass } = {}) {
   // different from the declared category — this catches the case where a
   // photo of a pothole was uploaded but the typed-out category/description
   // is about something else entirely.
-  if (
-    imagePrimaryClass &&
-    CATEGORY_KEYWORDS[imagePrimaryClass] &&
-    imagePrimaryClass !== declaredCategory
-  ) {
-    reasons.push(
-      `The uploaded photo was detected as "${CATEGORY_LABELS[imagePrimaryClass] || imagePrimaryClass}", ` +
-      `which differs from the selected category "${declaredCategory ? CATEGORY_LABELS[declaredCategory] : category}".`
-    );
+  const imageReason = imageMismatchReason(imagePrimaryClass, declaredCategory, category);
+  if (imageReason) {
+    reasons.push(imageReason);
     mismatchDetected = true;
     suggestedCategory = suggestedCategory || imagePrimaryClass;
     categoryMatchScore = Math.min(categoryMatchScore, 0.3);
@@ -303,11 +297,96 @@ function analyzeTextAuthenticity({ text, category, imagePrimaryClass } = {}) {
     reasons,
     qualityIssues,
     categoryMatch: declaredScore,
+    components: { categoryMatchScore, qualityScore },
+  };
+}
+
+function imageMismatchReason(imagePrimaryClass, declaredCategory, category) {
+  if (!imagePrimaryClass || !CATEGORY_KEYWORDS[imagePrimaryClass] || imagePrimaryClass === declaredCategory) {
+    return null;
+  }
+  return (
+    `The uploaded photo was detected as "${CATEGORY_LABELS[imagePrimaryClass] || imagePrimaryClass}", ` +
+    `which differs from the selected category "${declaredCategory ? CATEGORY_LABELS[declaredCategory] : category}".`
+  );
+}
+
+/**
+ * Refine a heuristic analyzeTextAuthenticity() result with a TypeSafe Jev
+ * result (services/TypeSafeJevService.js). Keyword matching misses
+ * paraphrases ("the road has a big crater" is fine, "my scooter nearly flipped
+ * on 5th street" isn't matched at all); Jev's category probabilities and
+ * genuineness check don't. The heuristic still contributes, weighted by Jev's
+ * confidence, and the photo-vs-category cap is kept as-is.
+ */
+function refineAuthenticityWithJev(heuristic, jev, { category, imagePrimaryClass } = {}) {
+  if (!jev) return heuristic;
+
+  const declaredCategory = CATEGORY_KEYWORDS[category] ? category : null;
+  const { categoryMatchScore: heuristicMatch, qualityScore: heuristicQuality } = heuristic.components;
+  // Confidence routing: trust Jev fully when it's confident, otherwise split.
+  const jevWeight = (jev.categoryConfidence ?? 0) >= 0.5 ? 1 : 0.5;
+
+  const reasons = [...heuristic.qualityIssues];
+  let mismatchDetected = false;
+  let suggestedCategory = null;
+  let categoryMatchScore = 1.0;
+
+  if (declaredCategory && declaredCategory !== 'others') {
+    const jevMatch = jev.categoryProbabilities[declaredCategory] ?? 0;
+    categoryMatchScore = jevWeight * jevMatch + (1 - jevWeight) * heuristicMatch;
+
+    if (jev.category !== declaredCategory && categoryMatchScore < 0.5) {
+      mismatchDetected = true;
+      if (CATEGORY_LABELS[jev.category] && jev.category !== 'others') {
+        suggestedCategory = jev.category;
+        reasons.push(
+          `Description reads like "${CATEGORY_LABELS[jev.category]}" rather than the selected ` +
+          `"${CATEGORY_LABELS[declaredCategory]}" category.`
+        );
+      } else {
+        reasons.push(
+          `Description doesn't seem to describe "${CATEGORY_LABELS[declaredCategory]}" — please confirm it matches the selected issue type.`
+        );
+      }
+    }
+  }
+
+  const imageReason = imageMismatchReason(imagePrimaryClass, declaredCategory, category);
+  if (imageReason) {
+    reasons.push(imageReason);
+    mismatchDetected = true;
+    suggestedCategory = suggestedCategory || imagePrimaryClass;
+    categoryMatchScore = Math.min(categoryMatchScore, 0.3);
+  }
+
+  // Heuristic quality checks (length, repetition, gibberish) are cheap and
+  // precise, so keep them in the mix rather than replacing them outright.
+  const qualityScore = 0.7 * jev.genuineProbability + 0.3 * heuristicQuality;
+  if (jev.genuineProbability < 0.3) {
+    reasons.push("Description doesn't read like a genuine, specific civic complaint.");
+  }
+
+  const authenticityScore = Math.max(0, Math.min(1,
+    (categoryMatchScore * priorityConfig.AUTHENTICITY_WEIGHTS.categoryMatch) +
+    (qualityScore * priorityConfig.AUTHENTICITY_WEIGHTS.textQuality)
+  ));
+
+  return {
+    ...heuristic,
+    authenticityScore: parseFloat(authenticityScore.toFixed(2)),
+    flagged: authenticityScore < 0.45,
+    mismatchDetected,
+    suggestedCategory,
+    reasons: [...new Set(reasons)],
+    components: { categoryMatchScore, qualityScore },
+    analysisMethod: 'typesafe-jev',
   };
 }
 
 module.exports = {
   analyzeTextAuthenticity,
+  refineAuthenticityWithJev,
   CATEGORY_KEYWORDS,
   CATEGORY_LABELS,
 };

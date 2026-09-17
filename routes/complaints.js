@@ -3,7 +3,8 @@ const router = express.Router();
 const { supabase } = require('../config/supabase');
 const LocationPriorityService = require('../services/LocationPriorityService');
 const { emotionService } = require('../services/EmotionAnalysisService');
-const { analyzeTextAuthenticity } = require('../services/TextAuthenticityService');
+const { analyzeTextAuthenticity, refineAuthenticityWithJev } = require('../services/TextAuthenticityService');
+const jevService = require('../services/TypeSafeJevService');
 const priorityConfig = require('../services/priorityConfig');
 const potholeGeometryService = require('../services/potholeGeometryService');
 const { castUpvote, toggleUpvote } = require('../services/voteService');
@@ -18,10 +19,14 @@ const locationPriorityService = new LocationPriorityService();
  * final submission use one source of truth.
  */
 async function analyzeComplaintText({ description, category, imagePrimaryClass, translation }) {
-  const [emotionResult, authenticity] = await Promise.all([
+  // analyzeEmotion() makes the same Jev request internally; TypeSafeJevService
+  // dedupes it, so this is still one network call.
+  const [emotionResult, jev] = await Promise.all([
     emotionService.analyzeEmotion(description, category, translation),
-    Promise.resolve(analyzeTextAuthenticity({ text: description, category, imagePrimaryClass })),
+    jevService.analyzeComplaint({ text: description, translation }),
   ]);
+  const heuristic = analyzeTextAuthenticity({ text: description, category, imagePrimaryClass });
+  const authenticity = refineAuthenticityWithJev(heuristic, jev, { category, imagePrimaryClass });
 
   return { emotion: emotionResult, authenticity };
 }

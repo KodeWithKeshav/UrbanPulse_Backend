@@ -220,7 +220,7 @@ router.get('/info', (req, res) => {
     },
     features: [
       'Privacy-aware location analysis with configurable accuracy levels',
-      'Google Places API integration for infrastructure mapping',
+      'OpenStreetMap (Overpass API) integration for infrastructure mapping',
       'Dynamic priority scoring based on nearby critical facilities',
       'Emergency response optimization for urgent complaint types',
       'Multi-level privacy protection (exact/street/area)',
@@ -306,7 +306,7 @@ router.get('/info', (req, res) => {
     },
     integration: {
       supportedRegions: ['India'],
-      dataProviders: ['Google Places API'],
+      dataProviders: ['OpenStreetMap Overpass API'],
       facilityTypes: ['hospital', 'school', 'police', 'fire_station', 'government', 'bank', 'pharmacy', 'transit_station'],
       coordinates: {
         format: 'decimal degrees',
@@ -330,7 +330,7 @@ router.get('/health', async (req, res) => {
   };
   
   try {
-    // Test Google Places API connectivity
+    // Test OpenStreetMap Overpass API connectivity
     console.log('🏥 Running health check...');
     const testStartTime = Date.now();
     
@@ -345,7 +345,8 @@ router.get('/health', async (req, res) => {
     
     healthData.status = 'healthy';
     healthData.checks = {
-      googlePlacesApi: {
+      placesApi: {
+        provider: 'openstreetmap-overpass',
         status: 'connected',
         responseTime: `${testDuration}ms`,
         lastTestScore: testResult.priorityScore,
@@ -368,7 +369,8 @@ router.get('/health', async (req, res) => {
     
     healthData.status = 'unhealthy';
     healthData.checks = {
-      googlePlacesApi: {
+      placesApi: {
+        provider: 'openstreetmap-overpass',
         status: 'error',
         error: error.message,
         lastChecked: new Date().toISOString()

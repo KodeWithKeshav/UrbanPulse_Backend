@@ -2,6 +2,7 @@ const axios = require('axios');
 require('dotenv').config();
 const priorityConfig = require('./priorityConfig');
 const { emotionService } = require('./EmotionAnalysisService');
+const osmPlaces = require('./osmPlacesService');
 
 /**
  * Location Priority Service for CivicStack
@@ -13,13 +14,6 @@ const { emotionService } = require('./EmotionAnalysisService');
  */
 class LocationPriorityService {
   constructor() {
-    this.apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    this.baseUrl = 'https://maps.googleapis.com/maps/api/place';
-
-    if (!this.apiKey) {
-      console.warn('⚠️ Google Places API key not found in environment variables');
-    }
-
     // Critical facility types. `weight` comes from priorityConfig's
     // AHP-derived FACILITY_WEIGHTS (see that file for the criticality score
     // and rationale behind each type). `radius` and the keyword filters
@@ -252,7 +246,7 @@ class LocationPriorityService {
       
       for (const type of probeTypes) {
         try {
-          const facilities = await this.queryGooglePlaces(latitude, longitude, type, probeRadius);
+          const facilities = await this.queryPlaces(latitude, longitude, type, probeRadius);
           totalFacilities += facilities.length;
           
           // Analyze business types
@@ -261,8 +255,7 @@ class LocationPriorityService {
               facility.types.forEach(t => businessTypes.add(t));
             }
           });
-          
-          await this.delay(300); // Rate limiting
+
         } catch (error) {
           console.warn(`⚠️ Probe error for ${type}:`, error.message);
         }
@@ -407,9 +400,6 @@ class LocationPriorityService {
           searchRadius: effectiveRadius
         };
         
-        // Add delay to respect API rate limits
-        await this.delay(200);
-        
       } catch (error) {
         console.error(`⚠️ Error analyzing ${facilityType}:`, error.message);
         if (error.retryable === false) {
@@ -441,7 +431,7 @@ class LocationPriorityService {
     for (const searchType of types) {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          const facilities = await this.queryGooglePlaces(latitude, longitude, searchType, radius);
+          const facilities = await this.queryPlaces(latitude, longitude, searchType, radius);
           if (facilities.length > 0) {
             return facilities;
           }
@@ -464,131 +454,13 @@ class LocationPriorityService {
   }
 
   /**
-   * Query Google Places API with enhanced filtering
+   * Nearby search for one Google-style place type via OpenStreetMap
+   * (services/osmPlacesService.js), with the facility keyword filtering.
    */
-  async queryGooglePlaces(latitude, longitude, type, radius) {
-    if (!this.apiKey) {
-      const error = new Error('Google Places API key not configured');
-      error.retryable = false; // missing config will never succeed on retry
-      throw error;
-    }
+  async queryPlaces(latitude, longitude, type, radius) {
+    const places = await osmPlaces.nearbySearch(latitude, longitude, type, radius);
 
-    // 1. Try modern Places API (New) first (required by Google for newer API keys)
-    try {
-      const newApiUrl = 'https://places.googleapis.com/v1/places:searchNearby';
-      const newApiResponse = await axios.post(
-        newApiUrl,
-        {
-          includedTypes: [type],
-          maxResultCount: 20,
-          locationRestriction: {
-            circle: {
-              center: { latitude: parseFloat(latitude), longitude: parseFloat(longitude) },
-              radius: parseFloat(radius)
-            }
-          }
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': this.apiKey,
-            'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.types,places.formattedAddress'
-          },
-          timeout: 10000
-        }
-      );
-
-      if (newApiResponse.status === 200) {
-        const places = (newApiResponse.data && Array.isArray(newApiResponse.data.places)) ? newApiResponse.data.places : [];
-        if (places.length === 0) {
-          return [];
-        }
-        const facilityType = this.getFacilityTypeFromSearchType(type);
-        const config = this.facilityConfig[facilityType];
-
-        const filtered = places.filter(place => {
-          const name = (place.displayName?.text || '').toLowerCase();
-          const types = place.types || [];
-          if (config && config.excludeKeywords) {
-            const hasExcluded = config.excludeKeywords.some(keyword => name.includes(keyword.toLowerCase()));
-            if (hasExcluded) return false;
-            if (facilityType === 'hospital' || facilityType === 'school' || facilityType === 'government') {
-              const transportWords = ['transport', 'logistics', 'cargo', 'travel', 'bus', 'taxi', 'auto'];
-              if (transportWords.some(word => name.includes(word))) return false;
-            }
-          }
-          if (config && config.includeKeywords && config.includeKeywords.length > 0) {
-            const hasIncluded = config.includeKeywords.some(keyword =>
-              name.includes(keyword.toLowerCase()) || types.some(t => t.includes(keyword.toLowerCase()))
-            );
-            if (!hasIncluded) return false;
-          }
-          return true;
-        });
-
-        return filtered.map(place => ({
-          name: place.displayName?.text || 'Unknown Place',
-          place_id: place.id,
-          distance: this.calculateDistance(
-            latitude, longitude,
-            place.location?.latitude || latitude, place.location?.longitude || longitude
-          ),
-          rating: place.rating || 0,
-          types: place.types || [],
-          vicinity: place.formattedAddress || '',
-          geometry: {
-            location: {
-              lat: place.location?.latitude,
-              lng: place.location?.longitude
-            }
-          }
-        }));
-      }
-    } catch (newApiErr) {
-      // If error is not a fatal credential error, fall through to legacy nearbysearch
-      if (newApiErr.response?.data?.error?.status !== 'REQUEST_DENIED') {
-        // Continue to legacy fallback
-      }
-    }
-
-    const response = await axios.get(`${this.baseUrl}/nearbysearch/json`, {
-      params: {
-        location: `${latitude},${longitude}`,
-        radius: radius,
-        type: type,
-        key: this.apiKey
-      },
-      timeout: 10000
-    });
-
-    if (response.data.status === 'OVER_QUERY_LIMIT') {
-      console.error('❌ Google Places API: Quota exceeded');
-      const error = new Error('API quota exceeded');
-      error.retryable = false; // quota won't reset within a retry window
-      throw error;
-    }
-
-    if (response.data.status === 'REQUEST_DENIED') {
-      console.error('❌ Google Places API: Request denied');
-      console.error('   Reason:', response.data.error_message || 'No error message');
-      console.error('   Common causes:');
-      console.error('   1. API key restrictions (check allowed IPs/referrers in Google Cloud Console)');
-      console.error('   2. Places API not enabled in Google Cloud Console');
-      console.error('   3. Billing not set up for the project');
-      const error = new Error('API request denied - check API key restrictions');
-      error.retryable = false; // a project-level config error, not a transient failure
-      throw error;
-    }
-
-    if (response.data.status === 'INVALID_REQUEST') {
-      console.error('❌ Google Places API: Invalid request');
-      const error = new Error('Invalid API request parameters');
-      error.retryable = false; // malformed params won't fix themselves on retry
-      throw error;
-    }
-
-    if (!response.data.results) {
-      console.warn(`⚠️ No results returned for type: ${type} at ${latitude},${longitude} (radius: ${radius}m)`);
+    if (places.length === 0) {
       return [];
     }
 
@@ -596,7 +468,7 @@ class LocationPriorityService {
     const facilityType = this.getFacilityTypeFromSearchType(type);
     const config = this.facilityConfig[facilityType];
     
-    const filteredResults = response.data.results.filter(place => {
+    const filteredResults = places.filter(place => {
       const name = place.name.toLowerCase();
       const types = place.types || [];
       
@@ -656,7 +528,7 @@ class LocationPriorityService {
   }
 
   /**
-   * Get facility type from Google Places search type
+   * Get facility type from place search type
    */
   getFacilityTypeFromSearchType(searchType) {
     const typeMapping = {
@@ -813,7 +685,7 @@ class LocationPriorityService {
   }
 
   /**
-   * Assess facility importance level from the raw Google Place `types`
+   * Assess facility importance level from the place's Google-style `types`
    * array (e.g. a place tagged as both "hospital" and "health"). The bonus
    * is a direct function of the same AHP-derived facility weights used
    * everywhere else in this file, instead of an independently-chosen
