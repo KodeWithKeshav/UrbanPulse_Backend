@@ -95,7 +95,6 @@ app.use('/api/image-analysis', require('./routes/imageAnalysis'));
 app.use('/cloudinary', require('./routes/cloudinary'));
 app.use('/api/location-priority', require('./routes/locationPriority'));
 app.use('/api/heat-map', require('./routes/heatMap'));
-app.use('/transcribe', require('./routes/transcription'));
 app.use('/api/transcribe', require('./routes/transcribe'));
 app.use('/api/chatbot', require('./routes/chatbot'));
 app.use('/api/statistics', require('./routes/statistics'));
