@@ -86,6 +86,8 @@ class EmotionAnalysisService {
     if (/[ऀ-ॿ]/.test(text)) return 'hi'; // Hindi
     if (/[஀-௿]/.test(text)) return 'ta'; // Tamil
     if (/[ఀ-౿]/.test(text)) return 'te'; // Telugu
+    if (/[ಀ-೿]/.test(text)) return 'kn'; // Kannada
+    if (/[ഀ-ൿ]/.test(text)) return 'ml'; // Malayalam
     return 'en'; // Default to English
   }
 
