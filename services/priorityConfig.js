@@ -158,6 +158,57 @@ const AUTHENTICITY_WEIGHTS = AUTHENTICITY_AHP.weights;
 // its own sake.
 
 // ---------------------------------------------------------------------------
+// 4b. MODEL-VS-RULE-BASED AUTHENTICITY BLEND
+//    services/ModelAuthenticityService.js adds a multilingual zero-shot
+//    model check (category-match + genuine-vs-spam) alongside the existing
+//    rule-based analyzeTextAuthenticity() check in services/
+//    TextAuthenticityService.js. Two blends are needed:
+//
+//    (a) How the model's own two signals (category-match score, genuine-
+//        vs-spam score) combine into one "model signal". The same
+//        criterion as section 4 applies here -- category relevance is the
+//        stronger signal of a mismatched/fabricated report than a
+//        generic genuine-vs-spam read -- so this reuses AUTHENTICITY_WEIGHTS
+//        directly rather than re-deriving an equivalent judgment.
+//
+//    (b) How that combined model signal weighs against the existing
+//        rule-based score (itself already a categoryMatch/textQuality
+//        blend) in the final authenticityScore.
+//
+//    Criterion for (b): "How reliable is this signal as evidence that the
+//    description is genuine and on-topic, now that the description may be
+//    in any of the app's 6 supported languages?"
+// ---------------------------------------------------------------------------
+const MODEL_VS_RULE_CRITICALITY_SCORES = {
+  model: 7,
+  // A multilingual zero-shot classifier reads the actual semantic content
+  // directly in whatever language the text is in -- the rule-based check's
+  // keyword lists only cover English/Hindi/Tamil terms, so for the other
+  // supported languages the model is effectively the only semantic signal.
+  rule: 3,
+  // Kept as a resilient, zero-latency, zero-external-dependency floor --
+  // particularly strong at catching repeated-character/keyboard-mash spam
+  // patterns that zero-shot classifiers sometimes score surprisingly
+  // "genuine" on for short text. Also the only signal available at all if
+  // the model call times out or errors.
+};
+
+const MODEL_VS_RULE_AHP = ahpFromScores(MODEL_VS_RULE_CRITICALITY_SCORES);
+const MODEL_VS_RULE_WEIGHTS = MODEL_VS_RULE_AHP.weights; // 0.70 / 0.30
+
+// Engineering defaults, not AHP-derived (no historical flagged-complaint
+// outcome data exists yet to fit these against) -- same caveat as the
+// PRIORITY_LEVELS bands below. Two bands replace the old single flag
+// cutoff: a very low blended score still hard-blocks submission outright
+// (near-certain spam/gibberish/off-topic), while a moderately low score now
+// lets submission succeed but queues the complaint for human admin review
+// instead of rejecting it at the door.
+const AUTHENTICITY_THRESHOLDS = {
+  hardBlock: 0.25,
+  flag: 0.45,
+};
+
+// ---------------------------------------------------------------------------
 // 5. COMPLAINT-CATEGORY URGENCY TIERS
 //    Replaces ~30 independently hand-picked per-category multipliers
 //    (previously 1.0x-1.9x, scattered across EmotionAnalysisService and
@@ -368,6 +419,10 @@ module.exports = {
   AUTHENTICITY_CRITICALITY_SCORES,
   AUTHENTICITY_AHP,
   AUTHENTICITY_WEIGHTS,
+  MODEL_VS_RULE_CRITICALITY_SCORES,
+  MODEL_VS_RULE_AHP,
+  MODEL_VS_RULE_WEIGHTS,
+  AUTHENTICITY_THRESHOLDS,
 
   CATEGORY_TIER_SCORES,
   CATEGORY_TIER_MAP,
