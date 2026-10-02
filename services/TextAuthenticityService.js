@@ -22,35 +22,56 @@ const priorityConfig = require('./priorityConfig');
 // Keyword sets per CityZen SAM3 civic-issue class (English + common Hindi/
 // Tamil terms). "others" is intentionally left empty — free-form issues
 // can't be keyword-matched, so they only go through the quality checks.
+// Each list covers English + the 5 Indian languages the app supports end to
+// end (Hindi, Tamil, Telugu, Malayalam, Kannada), plus common transliterated
+// loanwords (e.g. a citizen just saying "ஹோல்"/"హోల్"/"ഹോൾ"/"ಹೋಲ್" for
+// "hole" in their own script, which is extremely common in spoken, code-
+// switched civic complaints) -- these are a real, frequent pattern and
+// Dravidian-language coverage was previously missing entirely, which made
+// the rule-based half of the blend effectively blind for Telugu/Malayalam/
+// Kannada speakers (see services/ModelAuthenticityService.js for the
+// model-based half this is blended with).
 const CATEGORY_KEYWORDS = {
   pothole: [
     'pothole', 'potholes', 'pot hole', 'hole', 'holes', 'crater', 'craters',
     'road damage', 'damaged road', 'broken road', 'tar', 'asphalt', 'bitumen',
     'crack', 'cracks', 'sunken', 'depression', 'tyre', 'tire', 'wheel',
     'vehicle damage', 'bump', 'bumpy', 'uneven road', 'sinkhole',
-    'गड्ढा', 'गड्ढे', 'सड़क के गड्ढे', 'सड़क क्षतिग्रस्त',
-    'குழி', 'குழிகள்', 'சாலை குழி', 'சாலை சேதம்'
+    'गड्ढा', 'गड्ढे', 'सड़क के गड्ढे', 'सड़क क्षतिग्रस्त', 'पोथोल',
+    'குழி', 'குழிகள்', 'சாலை குழி', 'சாலை சேதம்', 'ஹோல்', 'பாத்ஹோல்',
+    'గుంత', 'గుంతలు', 'రోడ్డు గుంత', 'రోడ్డు దెబ్బతింది', 'హోల్', 'పొత్హోల్',
+    'കുഴി', 'കുഴികൾ', 'റോഡ് കുഴി', 'റോഡ് കേടായി', 'ഹോൾ', 'പോത്ത്ഹോൾ',
+    'ಗುಂಡಿ', 'ಗುಂಡಿಗಳು', 'ರಸ್ತೆ ಗುಂಡಿ', 'ರಸ್ತೆ ಹಾಳಾಗಿದೆ', 'ಹೋಲ್', 'ಪೊತ್ಹೋಲ್'
   ],
   fallen_tree: [
     'tree', 'trees', 'fallen tree', 'fallen trees', 'branch', 'branches',
     'trunk', 'uprooted', 'blocking road', 'blocking the road', 'storm',
     'windstorm', 'leaves', 'fell down', 'toppled', 'timber',
     'पेड़', 'पेड़ गिरा', 'पेड़ गिर गया', 'डाली', 'शाखा',
-    'மரம்', 'மரங்கள்', 'விழுந்த மரம்', 'கிளை'
+    'மரம்', 'மரங்கள்', 'விழுந்த மரம்', 'கிளை',
+    'చెట్టు', 'చెట్లు', 'పడిపోయిన చెట్టు', 'కొమ్మ',
+    'മരം', 'മരങ്ങൾ', 'വീണ മരം', 'ശാഖ',
+    'ಮರ', 'ಮರಗಳು', 'ಬಿದ್ದ ಮರ', 'ಕೊಂಬೆ'
   ],
   garbage_dumping: [
     'garbage', 'trash', 'waste', 'dump', 'dumping', 'litter', 'rubbish',
     'smell', 'stink', 'stench', 'plastic', 'landfill', 'debris', 'junk',
     'illegal dumping', 'piling up', 'heap', 'pile of garbage',
     'कचरा', 'गंदगी', 'कूड़ा', 'बदबू', 'कचरे का ढेर',
-    'குப்பை', 'கழிவு', 'குப்பை கொட்டுதல்', 'நாற்றம்'
+    'குப்பை', 'கழிவு', 'குப்பை கொட்டுதல்', 'நாற்றம்',
+    'చెత్త', 'వ్యర్థాలు', 'చెత్త డంపింగ్', 'దుర్వాసన',
+    'മാലിന്യം', 'ചവർ', 'മാലിന്യം തള്ളൽ', 'ദുർഗന്ധം',
+    'ಕಸ', 'ತ್ಯಾಜ್ಯ', 'ಕಸ ಸುರಿಯುವುದು', 'ದುರ್ವಾಸನೆ'
   ],
   stray_cattle: [
     'cattle', 'cow', 'cows', 'bull', 'bulls', 'stray animal', 'stray animals',
     'livestock', 'buffalo', 'ox', 'oxen', 'herd', 'blocking traffic',
     'animals on road', 'animal menace',
     'गाय', 'बैल', 'मवेशी', 'आवारा पशु',
-    'மாடு', 'மாடுகள்', 'கால்நடை', 'விலங்கு'
+    'மாடு', 'மாடுகள்', 'கால்நடை', 'விலங்கு',
+    'ఆవు', 'పశువులు', 'వీధి పశువులు', 'జంతువు',
+    'പശു', 'കന്നുകാലികൾ', 'തെരുവ് കന്നുകാലികൾ', 'മൃഗം',
+    'ಹಸು', 'ಜಾನುವಾರು', 'ಬೀದಿ ಜಾನುವಾರು', 'ಪ್ರಾಣಿ'
   ],
   fallen_electric_pole: [
     'electric pole', 'electricity pole', 'power line', 'power lines', 'cable',
@@ -58,7 +79,10 @@ const CATEGORY_KEYWORDS = {
     'spark', 'sparks', 'downed line', 'downed wire', 'pole fallen',
     'fallen pole', 'live wire', 'short circuit', 'electrocution',
     'बिजली का खंभा', 'बिजली के तार', 'खंभा गिरा', 'करंट',
-    'மின் கம்பம்', 'மின்சார கம்பம்', 'கம்பி', 'மின்சாரம்'
+    'மின் கம்பம்', 'மின்சார கம்பம்', 'கம்பி', 'மின்சாரம்',
+    'విద్యుత్ స్తంభం', 'కరెంట్ స్తంభం', 'వైర్లు', 'కరెంటు షాక్',
+    'വൈദ്യുത തൂൺ', 'കറന്റ് തൂൺ', 'വയറുകൾ', 'ഷോക്ക്',
+    'ವಿದ್ಯುತ್ ಕಂಬ', 'ಕರೆಂಟ್ ಕಂಬ', 'ತಂತಿಗಳು', 'ಶಾಕ್'
   ],
   concrete_structure_damage: [
     'concrete', 'structure', 'structural', 'building', 'wall', 'crack',
@@ -66,14 +90,20 @@ const CATEGORY_KEYWORDS = {
     'beam', 'damaged structure', 'cracked wall', 'ceiling', 'roof',
     'crumbling', 'debris falling', 'unsafe building',
     'इमारत', 'दीवार', 'ढांचा', 'दरार', 'ढह गया',
-    'கட்டிடம்', 'சுவர்', 'கட்டமைப்பு', 'விரிசல்', 'இடிந்து விழுந்தது'
+    'கட்டிடம்', 'சுவர்', 'கட்டமைப்பு', 'விரிசல்', 'இடிந்து விழுந்தது',
+    'భవనం', 'గోడ', 'నిర్మాణం', 'పగులు', 'కూలిపోయింది',
+    'കെട്ടിടം', 'ഭിത്തി', 'ഘടന', 'വിള്ളൽ', 'തകർന്നു',
+    'ಕಟ್ಟಡ', 'ಗೋಡೆ', 'ರಚನೆ', 'ಬಿರುಕು', 'ಕುಸಿದಿದೆ'
   ],
   road_waterlogging: [
     'water logging', 'waterlogged', 'water-logging', 'flood', 'flooding',
     'flooded', 'standing water', 'rain water', 'drain', 'drainage',
     'submerged', 'knee deep', 'knee-deep', 'overflowing drain', 'stagnant water',
     'जल जमाव', 'पानी भरा', 'बाढ़', 'जलभराव', 'नाली',
-    'வெள்ளம்', 'தண்ணீர் தேங்குதல்', 'சாலையில் தண்ணீர்', 'வடிகால்'
+    'வெள்ளம்', 'தண்ணீர் தேங்குதல்', 'சாலையில் தண்ணீர்', 'வடிகால்',
+    'నీటి నిల్వ', 'వరద', 'రోడ్డు మీద నీరు', 'డ్రైనేజీ',
+    'വെള്ളക്കെട്ട്', 'വെള്ളപ്പൊക്കം', 'റോഡിൽ വെള്ളം', 'ഓട',
+    'ನೀರು ನಿಲ್ಲುವಿಕೆ', 'ಪ್ರವಾಹ', 'ರಸ್ತೆಯಲ್ಲಿ ನೀರು', 'ಚರಂಡಿ'
   ],
   others: []
 };
@@ -306,8 +336,90 @@ function analyzeTextAuthenticity({ text, category, imagePrimaryClass } = {}) {
   };
 }
 
+const ModelAuthenticityService = require('./ModelAuthenticityService');
+
+/**
+ * Blended authenticity check: always runs the rule-based
+ * analyzeTextAuthenticity() above (cheap, synchronous, works offline), and
+ * additionally races a multilingual zero-shot model check
+ * (ModelAuthenticityService) against a timeout. When the model call
+ * succeeds, its category-match and genuine-vs-spam scores are blended with
+ * the rule-based score per priorityConfig.js's MODEL_VS_RULE_WEIGHTS
+ * (0.70 model / 0.30 rule-based); when it doesn't (missing API key,
+ * timeout, HF cold-start, network error), this falls back to the
+ * rule-based result untouched.
+ *
+ * Two-band threshold (priorityConfig.AUTHENTICITY_THRESHOLDS) replaces the
+ * old single flag cutoff:
+ *   - score < hardBlock: hardBlocked (submission still rejected outright)
+ *   - hardBlock <= score < flag: flagged but NOT hard-blocked (submission
+ *     succeeds, queued for admin review)
+ *   - score >= flag: not flagged
+ *
+ * @param {object} params - same shape as analyzeTextAuthenticity, plus:
+ * @param {string} [params.language] - language the text was captured in
+ *   (informational only here; the zero-shot model reads the text directly
+ *   regardless of language, no translation needed)
+ */
+async function analyzeTextAuthenticityBlended({ text, category, imagePrimaryClass, language } = {}) {
+  const ruleBased = analyzeTextAuthenticity({ text, category, imagePrimaryClass });
+
+  const modelResult = await ModelAuthenticityService.analyzeWithModel({ text, category });
+
+  const { hardBlock, flag } = priorityConfig.AUTHENTICITY_THRESHOLDS;
+
+  if (!modelResult.available) {
+    const score = ruleBased.authenticityScore;
+    return {
+      ...ruleBased,
+      hardBlocked: score < hardBlock,
+      flagged: score < flag,
+      ruleBasedScore: score,
+      modelScore: null,
+      blendedScore: score,
+      source: 'rule-based-fallback',
+    };
+  }
+
+  // The model's own two signals combine with the same categoryMatch/
+  // textQuality-style criticality judgment as the rule-based blend itself
+  // (see priorityConfig.js section 4b) -- category relevance is the
+  // stronger signal, genuineness the weaker one.
+  const modelScore =
+    modelResult.categoryScore * priorityConfig.AUTHENTICITY_WEIGHTS.categoryMatch +
+    modelResult.spamScore * priorityConfig.AUTHENTICITY_WEIGHTS.textQuality;
+
+  const { model: modelWeight, rule: ruleWeight } = priorityConfig.MODEL_VS_RULE_WEIGHTS;
+  const blendedScore = Math.max(0, Math.min(1,
+    modelScore * modelWeight + ruleBased.authenticityScore * ruleWeight
+  ));
+
+  const reasons = [...ruleBased.reasons];
+  if (modelResult.spamScore > 0.6) {
+    reasons.push('The description reads like spam or gibberish to the multilingual content model.');
+  }
+  if (category && CATEGORY_LABELS[category] && modelResult.categoryScore < 0.3) {
+    reasons.push(
+      `The multilingual content model does not find this description consistent with "${CATEGORY_LABELS[category]}".`
+    );
+  }
+
+  return {
+    ...ruleBased,
+    authenticityScore: parseFloat(blendedScore.toFixed(2)),
+    reasons,
+    hardBlocked: blendedScore < hardBlock,
+    flagged: blendedScore < flag,
+    ruleBasedScore: ruleBased.authenticityScore,
+    modelScore: parseFloat(modelScore.toFixed(2)),
+    blendedScore: parseFloat(blendedScore.toFixed(2)),
+    source: 'blended',
+  };
+}
+
 module.exports = {
   analyzeTextAuthenticity,
+  analyzeTextAuthenticityBlended,
   CATEGORY_KEYWORDS,
   CATEGORY_LABELS,
 };
