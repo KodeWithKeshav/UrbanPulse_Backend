@@ -3,7 +3,7 @@ const router = express.Router();
 const { supabase } = require('../config/supabase');
 const LocationPriorityService = require('../services/LocationPriorityService');
 const { emotionService } = require('../services/EmotionAnalysisService');
-const { analyzeTextAuthenticity } = require('../services/TextAuthenticityService');
+const { analyzeTextAuthenticityBlended } = require('../services/TextAuthenticityService');
 const priorityConfig = require('../services/priorityConfig');
 const potholeGeometryService = require('../services/potholeGeometryService');
 const { castUpvote, toggleUpvote } = require('../services/voteService');
@@ -17,10 +17,10 @@ const locationPriorityService = new LocationPriorityService();
  * complaint description together, so both the pre-submit check and the
  * final submission use one source of truth.
  */
-async function analyzeComplaintText({ description, category, imagePrimaryClass, translation }) {
+async function analyzeComplaintText({ description, category, imagePrimaryClass, translation, language }) {
   const [emotionResult, authenticity] = await Promise.all([
     emotionService.analyzeEmotion(description, category, translation),
-    Promise.resolve(analyzeTextAuthenticity({ text: description, category, imagePrimaryClass })),
+    analyzeTextAuthenticityBlended({ text: description, category, imagePrimaryClass, language }),
   ]);
 
   return { emotion: emotionResult, authenticity };
@@ -36,7 +36,7 @@ async function analyzeComplaintText({ description, category, imagePrimaryClass, 
  */
 router.post('/analyze-text', async (req, res) => {
   try {
-    const { description, category, imagePrimaryClass, translation } = req.body;
+    const { description, category, imagePrimaryClass, translation, language } = req.body;
 
     if (!description || !description.trim()) {
       return res.status(400).json({
@@ -46,7 +46,7 @@ router.post('/analyze-text', async (req, res) => {
       });
     }
 
-    const result = await analyzeComplaintText({ description, category, imagePrimaryClass, translation });
+    const result = await analyzeComplaintText({ description, category, imagePrimaryClass, translation, language });
 
     res.json({
       success: true,
@@ -150,7 +150,8 @@ router.post('/submit', async (req, res) => {
       imageValidation,
       locationData,
       userId = 'anonymous',
-      userType = 'citizen'
+      userType = 'citizen',
+      language = 'en'
     } = req.body;
     
     // Input validation
@@ -357,6 +358,7 @@ router.post('/submit', async (req, res) => {
       description,
       category,
       imagePrimaryClass: imageValidation?.primaryClass || null,
+      language,
     });
     console.log('🔎 Text analysis result:', {
       authenticityScore: textAnalysis.authenticity.authenticityScore,
@@ -365,10 +367,14 @@ router.post('/submit', async (req, res) => {
       emotionScore: textAnalysis.emotion.emotionScore,
     });
 
-    // Reject outright if the description doesn't genuinely match the
-    // selected/detected issue (or reads like spam/gibberish) — no
-    // "submit anyway" path. The citizen must fix the text or the category.
-    if (textAnalysis.authenticity.flagged) {
+    // Reject outright only when the blended authenticity score is low
+    // enough to be near-certain spam/gibberish/off-topic (hardBlocked) — no
+    // "submit anyway" path for that tier. A moderately low score
+    // (flagged but not hardBlocked) now lets submission succeed but queues
+    // the complaint for human admin review instead of rejecting at the
+    // door; see services/TextAuthenticityService.js and
+    // priorityConfig.js's AUTHENTICITY_THRESHOLDS.
+    if (textAnalysis.authenticity.hardBlocked) {
       return res.status(400).json({
         success: false,
         error: 'The description does not appear to match the selected issue type.',
@@ -431,13 +437,19 @@ router.post('/submit', async (req, res) => {
       content_flagged: textAnalysis.authenticity.flagged,
       content_flag_reason: textAnalysis.authenticity.reasons.join(' ') || null,
 
+      // Which language the description was captured in (typed or via the
+      // multilingual speech-to-text flow). Dropped gracefully by
+      // filterComplaintDataForInsertion() if the `language` column migration
+      // (database/add_language_column_to_complaints.sql) hasn't run yet.
+      language,
+
       // Images and media
       image_urls: imageUrl ? [imageUrl] : [],
       audio_url: null,
 
       // Status fields
       verification_status: textAnalysis.authenticity.flagged
-        ? 'flagged'
+        ? 'flagged_for_review'
         : (imageValidation?.allowUpload ? 'verified' : 'unverified'),
       assigned_department: null,
       assigned_admin_id: null,
@@ -570,6 +582,7 @@ router.post('/submit', async (req, res) => {
       contentAnalysis: {
         authenticityScore: textAnalysis.authenticity.authenticityScore,
         flagged: textAnalysis.authenticity.flagged,
+        hardBlocked: textAnalysis.authenticity.hardBlocked,
         mismatchDetected: textAnalysis.authenticity.mismatchDetected,
         suggestedCategory: textAnalysis.authenticity.suggestedCategory,
         reasons: textAnalysis.authenticity.reasons,
