@@ -3,6 +3,7 @@ const router = express.Router();
 
 // Import the knowledge base using CommonJS
 const { CIVIC_KNOWLEDGE_BASE, ChatbotKnowledgeMatcher } = require('../services/ChatbotKnowledgeBase');
+const GroqChatbotService = require('../services/GroqChatbotService');
 
 let knowledgeMatcher;
 
@@ -30,7 +31,7 @@ const conversationSessions = new Map();
  */
 router.post('/message', async (req, res) => {
   try {
-    const { message, conversationHistory = [], userId = 'anonymous' } = req.body;
+    const { message, conversationHistory = [], userId = 'anonymous', language = 'en' } = req.body;
 
     console.log('🤖 Chatbot query:', { message, userId });
 
@@ -69,14 +70,28 @@ router.post('/message', async (req, res) => {
       timestamp: new Date()
     });
 
-    // Find best response using knowledge base
+    // Find best response using knowledge base - this keyword-matched result
+    // is kept as the grounding context for Groq (when available) and as the
+    // full fallback reply when Groq is unavailable, so the retrieval step
+    // always runs regardless of which path generates the final text.
     const matchResult = knowledgeMatcher.findBestMatch(
-      message, 
+      message,
       session.messages.slice(-5) // Last 5 messages for context
     );
 
+    const groundedReply = await GroqChatbotService.generateGroundedReply({
+      userMessage: message,
+      matchResult,
+      conversationHistory: session.messages.slice(-5),
+      language,
+    });
+
+    const effectiveMatchResult = groundedReply.available
+      ? { ...matchResult, text: groundedReply.reply }
+      : matchResult;
+
     // Generate contextual response
-    const response = await generateChatbotResponse(message, matchResult, session);
+    const response = await generateChatbotResponse(message, effectiveMatchResult, session);
 
     // Add bot response to session
     session.messages.push({
