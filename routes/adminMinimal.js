@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { geometryColumnsAvailable, GEOMETRY_PLACEHOLDER } = require('../services/schemaAvailability');
+const { geometryColumnsAvailable, GEOMETRY_PLACEHOLDER, languageColumnAvailable } = require('../services/schemaAvailability');
 
 // Test endpoint
 router.get('/test', (req, res) => {
@@ -71,23 +71,38 @@ router.get('/dashboard/overview', async (req, res) => {
 // Super minimal priority queue - FIXED with manual user lookup
 router.get('/complaints/priority-queue', async (req, res) => {
   try {
-    const { limit, page = 1, search, location, category, status } = req.query;
+    const { limit, page = 1, search, location, category, status, flagged } = req.query;
     const supabase = req.app.get('supabase');
 
-    console.log('🔍 Fetching complaints for priority queue with filters:', { search, location, category, status });
+    console.log('🔍 Fetching complaints for priority queue with filters:', { search, location, category, status, flagged });
 
     // Pothole geometry columns (database/add_pothole_geometry_columns.sql)
     // may not have been migrated onto this Supabase project yet - probe
     // first rather than hard-failing the whole queue with a Postgres
     // "column does not exist" error over a handful of optional fields.
+    // Same for the newer `language` column
+    // (database/add_language_column_to_complaints.sql).
     const geometryReady = await geometryColumnsAvailable(supabase);
-    const baseColumns = 'id, title, description, category, status, priority_score, location_address, created_at, user_id';
+    const languageReady = await languageColumnAvailable(supabase);
+    const baseColumns = 'id, title, description, category, status, priority_score, location_address, created_at, user_id, text_authenticity_score, content_flagged, content_flag_reason, verification_status';
     const geometryColumns = 'estimated_width_cm, estimated_length_cm, estimated_area_cm2, estimated_depth_cm, geometry_confidence, geometry_status';
+
+    const selectColumns = [baseColumns, geometryReady ? geometryColumns : null, languageReady ? 'language' : null]
+      .filter(Boolean)
+      .join(', ');
 
     // First get ALL complaints without joins to avoid schema issues
     let complaintsQuery = supabase
       .from('complaints')
-      .select(geometryReady ? `${baseColumns}, ${geometryColumns}` : baseColumns);
+      .select(selectColumns);
+
+    // Complaints the model-based authenticity check flagged for human
+    // review (see services/TextAuthenticityService.js
+    // analyzeTextAuthenticityBlended) - submission already succeeded for
+    // these, they just need an admin look.
+    if (flagged === 'true') {
+      complaintsQuery = complaintsQuery.eq('content_flagged', true);
+    }
 
     // Add search functionality
     if (search && search.trim()) {
@@ -134,6 +149,9 @@ router.get('/complaints/priority-queue', async (req, res) => {
     // until the migration is applied.
     if (!geometryReady && complaints) {
       complaints = complaints.map(c => ({ ...c, ...GEOMETRY_PLACEHOLDER }));
+    }
+    if (!languageReady && complaints) {
+      complaints = complaints.map(c => ({ ...c, language: 'en' }));
     }
 
     console.log(`📋 Found ${complaints?.length || 0} complaints${geometryReady ? '' : ' (geometry columns not migrated yet - using placeholders)'}`);

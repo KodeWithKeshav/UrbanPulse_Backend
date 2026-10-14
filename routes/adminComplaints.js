@@ -94,14 +94,22 @@ router.get('/', async (req, res) => {
     console.log('📋 Admin fetching all complaints');
     
     // Query parameters for filtering
-    const { status, priority, category, days } = req.query;
-    
+    const { status, priority, category, days, flagged } = req.query;
+
     const supabase = req.app.get('supabase');
     let query = supabase.from('complaints').select('*');
-    
+
     // Apply filters if provided
     if (status) {
       query = query.eq('status', status);
+    }
+
+    // Complaints the model-based authenticity check flagged for human
+    // review (see services/TextAuthenticityService.js
+    // analyzeTextAuthenticityBlended) - submission already succeeded for
+    // these, they just need an admin look.
+    if (flagged === 'true') {
+      query = query.eq('content_flagged', true);
     }
     
     if (priority) {
