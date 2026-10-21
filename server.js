@@ -43,11 +43,14 @@ app.use(compression());
 
 // CORS configuration - allow frontend origins
 const allowedOrigins = [
-  'http://localhost:8081', // Expo development server
-  'http://localhost:3000', // React development server  
-  'http://localhost:19006', // Expo web development
-  'https://civic-rezo-frontend.netlify.app', // Production Netlify URL (placeholder)
-  process.env.FRONTEND_URL // Allow custom frontend URL from environment
+  'http://localhost:8081',   // Expo development server
+  'http://localhost:3000',   // React development server
+  'http://localhost:5173',   // Vite development server
+  'http://localhost:19006',  // Expo web development
+  'https://civic-rezo-frontend.netlify.app',           // Netlify (legacy)
+  'https://urbanpulse-frontend-gamma.vercel.app',      // Vercel production
+  /^https:\/\/urbanpulse-frontend-gamma-.*\.vercel\.app$/, // Vercel preview deployments
+  process.env.FRONTEND_URL   // Custom frontend URL override
 ].filter(Boolean);
 
 app.use(cors({
@@ -55,9 +58,11 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+    const isAllowed = allowedOrigins.some(allowed =>
+      allowed instanceof RegExp ? allowed.test(origin) : allowed === origin
+    );
+
+    if (isAllowed) return callback(null, true);
 
     // In development, allow all origins
     if (process.env.NODE_ENV !== 'production') {

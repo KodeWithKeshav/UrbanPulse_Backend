@@ -59,3 +59,13 @@ services:
         sync: false
       - key: SARVAM_API_KEY
         sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: GOOGLE_GEOCODING_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: HUGGING_FACE_API_KEY
+        sync: false
