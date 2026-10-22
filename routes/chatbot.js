@@ -1,332 +1,240 @@
 const express = require('express');
 const router = express.Router();
+const Groq = require('groq-sdk');
 
-// Import the knowledge base using CommonJS
-const { CIVIC_KNOWLEDGE_BASE, ChatbotKnowledgeMatcher } = require('../services/ChatbotKnowledgeBase');
-const GroqChatbotService = require('../services/GroqChatbotService');
+const { ChatbotKnowledgeMatcher } = require('../services/ChatbotKnowledgeBase');
 
+// ─── Init ─────────────────────────────────────────────────────────────────────
 let knowledgeMatcher;
-
-// Initialize the knowledge matcher
-const initializeKnowledgeBase = () => {
+const initKB = () => {
   try {
     knowledgeMatcher = new ChatbotKnowledgeMatcher();
-    console.log('✅ Chatbot Knowledge Base initialized successfully');
+    console.log('✅ Chatbot Knowledge Base initialised');
     return true;
-  } catch (error) {
-    console.error('❌ Failed to initialize Chatbot Knowledge Base:', error);
+  } catch (e) {
+    console.error('❌ KB init failed:', e);
     return false;
   }
 };
+initKB();
 
-// Initialize on module load
-initializeKnowledgeBase();
+// GROQ client (lazy — only if key present)
+const groq = process.env.GROQ_API_KEY
+  ? new Groq({ apiKey: process.env.GROQ_API_KEY })
+  : null;
 
-// Store conversation sessions (in production, use Redis or database)
-const conversationSessions = new Map();
+const GROQ_MODEL = 'qwen/qwen3-27b';
+const KB_CONFIDENCE_THRESHOLD = 0.55;
 
-/**
- * Process chatbot message and return intelligent response
- * POST /api/chatbot/message
- */
-router.post('/message', async (req, res) => {
-  try {
-    const { message, conversationHistory = [], userId = 'anonymous', language = 'en' } = req.body;
+// In-memory sessions
+const sessions = new Map();
 
-    console.log('🤖 Chatbot query:', { message, userId });
+// ─── Navigation Tool Definitions ──────────────────────────────────────────────
+const NAV_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'navigate_to_page',
+      description:
+        'Navigate the user to a specific page/section of the CityZen app. ' +
+        'Call this when the user asks how to reach a feature, or says they want to go somewhere.',
+      parameters: {
+        type: 'object',
+        properties: {
+          page: {
+            type: 'string',
+            enum: ['feed', 'dashboard', 'submit', 'map', 'reports', 'chatbot', 'feedback', 'transparency'],
+            description: 'The target page slug',
+          },
+          reason: {
+            type: 'string',
+            description: 'Brief explanation shown to the user before navigating',
+          },
+        },
+        required: ['page', 'reason'],
+      },
+    },
+  },
+];
 
-    // Check if knowledge base is initialized
-    if (!knowledgeMatcher) {
-      console.log('⏳ Knowledge base not yet initialized, attempting to initialize...');
-      await initializeKnowledgeBase();
-      
-      if (!knowledgeMatcher) {
-        return res.status(503).json({
-          success: false,
-          error: 'Chatbot service is initializing, please try again in a moment'
-        });
-      }
-    }
+const PAGE_LABELS = {
+  feed:         'Complaint Feed',
+  dashboard:    'Dashboard',
+  submit:       'Submit Complaint',
+  map:          'Complaint Map',
+  reports:      'Personal Reports',
+  chatbot:      'AI Assistant',
+  feedback:     'Feedback',
+  transparency: 'Transparency',
+};
 
-    // Validate input
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: 'Message is required and must be a string'
-      });
-    }
+// ─── System prompt ────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are the AI assistant embedded in **CityZen**, a civic complaint-management platform.
+Your job is to help citizens report issues (potholes, broken streetlights, sewage, etc.), navigate the app, and understand how their complaints are processed.
 
-    // Get or create conversation session
-    let session = conversationSessions.get(userId) || {
-      messages: [],
-      context: {},
-      startTime: new Date()
+Pages available in the app:
+- **feed** – Complaint Feed (Instagram-style view of nearby civic issues)
+- **dashboard** – Citizen Dashboard (your stats, recent activity)
+- **submit** – Submit a Complaint (report a new civic issue with AI image validation)
+- **map** – Complaint Map (live heat-map of all complaints)
+- **reports** – Personal Reports (track your own submissions)
+- **chatbot** – AI Assistant (this page)
+- **feedback** – Feedback (rate the app experience)
+- **transparency** – Transparency Dashboard (public accountability metrics)
+
+When the user asks to go somewhere, or asks how to reach a feature, use the **navigate_to_page** tool.
+Always respond in a helpful, concise, friendly tone. Use markdown formatting (bold, bullet points) where it helps.
+Keep responses short unless the user asks for more detail. Never make up data.`;
+
+// ─── GROQ call with tool support ─────────────────────────────────────────────
+async function callGroq(userMessage, history = []) {
+  if (!groq) throw new Error('GROQ client not initialised — check GROQ_API_KEY');
+
+  const messages = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    ...history.map(m => ({ role: m.type === 'bot' ? 'assistant' : 'user', content: m.text })),
+    { role: 'user', content: userMessage },
+  ];
+
+  const response = await groq.chat.completions.create({
+    model: GROQ_MODEL,
+    messages,
+    tools: NAV_TOOLS,
+    tool_choice: 'auto',
+    temperature: 0.6,
+    max_tokens: 1024,
+  });
+
+  const choice = response.choices[0];
+  const msg = choice.message;
+
+  // ── Tool call: navigation ──
+  if (msg.tool_calls && msg.tool_calls.length > 0) {
+    const call = msg.tool_calls[0];
+    const args = JSON.parse(call.function.arguments);
+    const pageName = PAGE_LABELS[args.page] || args.page;
+
+    const followUpMessages = [
+      ...messages,
+      msg,
+      {
+        role: 'tool',
+        tool_call_id: call.id,
+        content: JSON.stringify({ success: true, navigatedTo: args.page }),
+      },
+    ];
+
+    const followUp = await groq.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: followUpMessages,
+      temperature: 0.5,
+      max_tokens: 512,
+    });
+
+    return {
+      reply:      followUp.choices[0].message.content,
+      action:     { type: 'navigate', page: args.page, label: pageName },
+      source:     'groq_tool',
+      confidence: 0.9,
     };
-
-    // Add user message to session
-    session.messages.push({
-      type: 'user',
-      text: message,
-      timestamp: new Date()
-    });
-
-    // Find best response using knowledge base - this keyword-matched result
-    // is kept as the grounding context for Groq (when available) and as the
-    // full fallback reply when Groq is unavailable, so the retrieval step
-    // always runs regardless of which path generates the final text.
-    const matchResult = knowledgeMatcher.findBestMatch(
-      message,
-      session.messages.slice(-5) // Last 5 messages for context
-    );
-
-    const groundedReply = await GroqChatbotService.generateGroundedReply({
-      userMessage: message,
-      matchResult,
-      conversationHistory: session.messages.slice(-5),
-      language,
-    });
-
-    const effectiveMatchResult = groundedReply.available
-      ? { ...matchResult, text: groundedReply.reply }
-      : matchResult;
-
-    // Generate contextual response
-    const response = await generateChatbotResponse(message, effectiveMatchResult, session);
-
-    // Add bot response to session
-    session.messages.push({
-      type: 'bot',
-      text: response.reply,
-      confidence: response.confidence,
-      category: response.category,
-      timestamp: new Date()
-    });
-
-    // Update session
-    conversationSessions.set(userId, session);
-
-    // Clean up old sessions (keep last 100)
-    if (conversationSessions.size > 100) {
-      const oldestKey = conversationSessions.keys().next().value;
-      conversationSessions.delete(oldestKey);
-    }
-
-    console.log('✅ Chatbot response generated:', {
-      category: response.category,
-      confidence: response.confidence
-    });
-
-    res.json({
-      success: true,
-      reply: response.reply,
-      confidence: response.confidence,
-      category: response.category,
-      suggestedActions: response.suggestedActions || [],
-      followUpSuggestions: knowledgeMatcher.getFollowUpSuggestions(
-        response.category, 
-        message
-      ),
-      sessionId: userId
-    });
-
-  } catch (error) {
-    console.error('❌ Chatbot error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process chatbot message',
-      details: error.message
-    });
-  }
-});
-
-/**
- * Get conversation history for a user
- * GET /api/chatbot/history/:userId
- */
-router.get('/history/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const session = conversationSessions.get(userId);
-
-    if (!session) {
-      return res.json({
-        success: true,
-        messages: [],
-        sessionExists: false
-      });
-    }
-
-    res.json({
-      success: true,
-      messages: session.messages.slice(-20), // Last 20 messages
-      sessionExists: true,
-      startTime: session.startTime
-    });
-
-  } catch (error) {
-    console.error('❌ History retrieval error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve conversation history'
-    });
-  }
-});
-
-/**
- * Clear conversation history for a user
- * DELETE /api/chatbot/history/:userId
- */
-router.delete('/history/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    conversationSessions.delete(userId);
-
-    res.json({
-      success: true,
-      message: 'Conversation history cleared'
-    });
-
-  } catch (error) {
-    console.error('❌ History clearing error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to clear conversation history'
-    });
-  }
-});
-
-/**
- * Get chatbot analytics and performance metrics
- * GET /api/chatbot/analytics
- */
-router.get('/analytics', async (req, res) => {
-  try {
-    const totalSessions = conversationSessions.size;
-    const categories = {};
-    const avgConfidence = [];
-    let totalMessages = 0;
-
-    // Analyze all sessions
-    for (const [userId, session] of conversationSessions) {
-      totalMessages += session.messages.length;
-      
-      session.messages.forEach(msg => {
-        if (msg.type === 'bot') {
-          // Count categories
-          categories[msg.category] = (categories[msg.category] || 0) + 1;
-          
-          // Collect confidence scores
-          if (msg.confidence) {
-            avgConfidence.push(msg.confidence);
-          }
-        }
-      });
-    }
-
-    const averageConfidence = avgConfidence.length > 0 
-      ? avgConfidence.reduce((a, b) => a + b, 0) / avgConfidence.length 
-      : 0;
-
-    res.json({
-      success: true,
-      analytics: {
-        totalSessions,
-        totalMessages,
-        averageConfidence: Math.round(averageConfidence * 100) / 100,
-        categoryDistribution: categories,
-        popularCategories: Object.entries(categories)
-          .sort(([,a], [,b]) => b - a)
-          .slice(0, 5)
-          .map(([category, count]) => ({ category, count })),
-        timestamp: new Date()
-      }
-    });
-
-  } catch (error) {
-    console.error('❌ Analytics error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate analytics'
-    });
-  }
-});
-
-/**
- * Generate intelligent chatbot response
- */
-async function generateChatbotResponse(userMessage, matchResult, session) {
-  const message = userMessage.toLowerCase();
-
-  // Enhanced responses based on context and user patterns
-  let enhancedResponse = matchResult.text;
-  let confidence = matchResult.confidence || 0.5;
-
-  // Check for follow-up questions
-  if (session.messages.length > 1) {
-    const lastBotMessage = session.messages
-      .slice()
-      .reverse()
-      .find(msg => msg.type === 'bot');
-
-    if (lastBotMessage && isFollowUpQuestion(message, lastBotMessage.category)) {
-      enhancedResponse = generateFollowUpResponse(message, lastBotMessage.category);
-      confidence = Math.min(confidence + 0.2, 1.0);
-    }
-  }
-
-  // Add personalization based on conversation history
-  if (session.messages.length > 5) {
-    enhancedResponse += "\n\n💡 *I notice you're exploring the app - feel free to ask me anything else!*";
-  }
-
-  // Add time-based greetings
-  const hour = new Date().getHours();
-  if (message.includes('hello') || message.includes('hi')) {
-    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-    enhancedResponse = `${greeting}! ` + enhancedResponse;
   }
 
   return {
-    reply: enhancedResponse,
-    confidence,
-    category: matchResult.category,
-    suggestedActions: matchResult.suggestedActions || []
+    reply:      msg.content,
+    action:     null,
+    source:     'groq',
+    confidence: 0.85,
   };
 }
 
-/**
- * Check if user message is a follow-up question
- */
-function isFollowUpQuestion(message, lastCategory) {
-  const followUpIndicators = ['what about', 'how about', 'what if', 'can i also', 'and', 'but'];
-  const hasFollowUpIndicator = followUpIndicators.some(indicator => 
-    message.includes(indicator)
-  );
+// ─── POST /api/chatbot/message ────────────────────────────────────────────────
+router.post('/message', async (req, res) => {
+  try {
+    const { message, conversationHistory = [], userId = 'anonymous' } = req.body;
 
-  // Check if asking for more details about the same topic
-  const askingForMore = ['more', 'details', 'explain', 'tell me', 'how'].some(word => 
-    message.includes(word)
-  );
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
 
-  return hasFollowUpIndicator || askingForMore;
-}
+    if (!knowledgeMatcher) {
+      initKB();
+      if (!knowledgeMatcher) {
+        return res.status(503).json({ success: false, error: 'Chatbot initialising, try again shortly' });
+      }
+    }
 
-/**
- * Generate follow-up response based on previous category
- */
-function generateFollowUpResponse(message, previousCategory) {
-  const followUpResponses = {
-    submission_guide: "📋 **More about Complaint Submission:**\n\n• After submission, you get a unique complaint ID\n• Track progress in 'Personal Reports'\n• Updates sent via notifications\n• Average response time: 2-7 days\n• Urgent issues get priority handling\n• You can add follow-up comments",
-    
-    voting_system: "🗳️ **More about Voting:**\n\n• Each user gets one vote per complaint\n• You can change your vote anytime\n• Votes influence municipal priority\n• High-voted issues get faster response\n• Voting is anonymous and secure\n• Your vote helps the community voice",
-    
-    civic_categories: "🏛️ **More about Civic Issues:**\n\n• Issues are auto-categorized by AI\n• Each category has different SLAs\n• Urgent issues bypass normal queue\n• Regular issues follow priority order\n• Status updates sent automatically\n• Resolution confirmed by photo evidence",
-    
-    location_privacy: "🔐 **More about Privacy:**\n\n• Location data never shared with third parties\n• Used only for routing and priority\n• Automatically deleted after resolution\n• You control privacy level\n• Option to submit anonymously\n• Complies with data protection laws"
-  };
+    let session = sessions.get(userId) || { messages: [], startTime: new Date() };
+    session.messages.push({ type: 'user', text: message, timestamp: new Date() });
+    const recentHistory = session.messages.slice(-8);
 
-  return followUpResponses[previousCategory] || 
-    "I'd be happy to explain more! What specific aspect would you like to know about?";
-}
+    // ── 1. Rule-based match ──
+    const match = knowledgeMatcher.findBestMatch(message, recentHistory);
+    console.log(`🤖 KB match: category=${match.category}, confidence=${match.confidence}`);
+
+    let reply, action = null, source, confidence;
+
+    if (match.confidence >= KB_CONFIDENCE_THRESHOLD) {
+      reply      = match.text;
+      confidence = match.confidence;
+      source     = 'knowledge_base';
+      if (session.messages.length > 5) {
+        reply += '\n\n💡 *Feel free to ask me anything else about CityZen!*';
+      }
+    } else {
+      console.log('⚡ KB confidence low — calling GROQ');
+      try {
+        const groqResult = await callGroq(message, recentHistory);
+        reply      = groqResult.reply;
+        action     = groqResult.action;
+        source     = groqResult.source;
+        confidence = groqResult.confidence;
+      } catch (groqErr) {
+        console.error('❌ GROQ error:', groqErr.message);
+        reply      = match.text || "I'm not sure about that. Could you rephrase your question?";
+        source     = 'knowledge_base_fallback';
+        confidence = match.confidence || 0.3;
+      }
+    }
+
+    session.messages.push({ type: 'bot', text: reply, action, source, confidence, timestamp: new Date() });
+    sessions.set(userId, session);
+    if (sessions.size > 200) sessions.delete(sessions.keys().next().value);
+
+    const followUpSuggestions = knowledgeMatcher.getFollowUpSuggestions(match.category, message);
+
+    res.json({
+      success: true,
+      reply,
+      confidence,
+      category:            match.category,
+      source,
+      action,
+      suggestedActions:    match.suggestedActions || [],
+      followUpSuggestions,
+      sessionId:           userId,
+    });
+
+  } catch (err) {
+    console.error('❌ Chatbot error:', err);
+    res.status(500).json({ success: false, error: 'Failed to process message', details: err.message });
+  }
+});
+
+// ─── GET /api/chatbot/history/:userId ────────────────────────────────────────
+router.get('/history/:userId', (req, res) => {
+  const session = sessions.get(req.params.userId);
+  res.json({
+    success:       true,
+    messages:      session ? session.messages.slice(-30) : [],
+    sessionExists: !!session,
+    startTime:     session?.startTime,
+  });
+});
+
+// ─── DELETE /api/chatbot/history/:userId ─────────────────────────────────────
+router.delete('/history/:userId', (req, res) => {
+  sessions.delete(req.params.userId);
+  res.json({ success: true, message: 'History cleared' });
+});
 
 module.exports = router;
