@@ -12,8 +12,9 @@ router.get('/data', async (req, res) => {
   try {
     console.log('🗺️ Heat map data requested');
     
+    const daysParam = req.query.days;
     const filters = {
-      dateRange: parseInt(req.query.days) || 30, // Last 30 days by default
+      dateRange: (daysParam && daysParam !== 'all') ? parseInt(daysParam) : null,
       status: req.query.status,
       complaintType: req.query.type
     };
@@ -49,8 +50,19 @@ router.get('/statistics', async (req, res) => {
   try {
     console.log('📊 Statistics requested');
     
-    const timeRange = parseInt(req.query.days) || 30;
-    const statistics = await heatMapService.getComplaintStatistics(timeRange);
+    const daysParam = req.query.days;
+    const timeRange = (daysParam && daysParam !== 'all') ? parseInt(daysParam) : null;
+    const heatMapData = await heatMapService.getComplaintHeatMapData({ dateRange: timeRange });
+    const statistics = heatMapData.statistics || {
+      total: 0,
+      resolved: 0,
+      active: 0,
+      pending: 0,
+      resolutionRate: 0,
+      averageResolutionDays: 0,
+      byType: {},
+      byPriority: {}
+    };
     
     console.log('✅ Statistics calculated:', {
       total: statistics.total,
@@ -83,8 +95,9 @@ router.get('/filtered', async (req, res) => {
   try {
     console.log('🔍 Filtered heat map data requested');
     
+    const daysParam = req.query.days;
     const filters = {
-      dateRange: parseInt(req.query.days) || 30,
+      dateRange: (daysParam && daysParam !== 'all') ? parseInt(daysParam) : null,
       status: req.query.status,
       complaintType: req.query.type,
       priorityLevel: req.query.priority,

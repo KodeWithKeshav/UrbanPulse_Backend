@@ -65,10 +65,10 @@ class HeatMapService {
         .not('location_latitude', 'is', null)
         .not('location_longitude', 'is', null);
 
-      // Apply date filter (default to last 30 days)
-      if (filters.dateRange) {
+      // Apply date filter (only when a specific positive dateRange is requested)
+      if (filters.dateRange && filters.dateRange > 0) {
         const startDate = new Date();
-        startDate.setDate(startDate.getDate() - (filters.dateRange || 30));
+        startDate.setDate(startDate.getDate() - filters.dateRange);
         query = query.gte('created_at', startDate.toISOString());
       }
 
