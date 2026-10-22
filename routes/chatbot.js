@@ -23,7 +23,7 @@ const groq = process.env.GROQ_API_KEY
   ? new Groq({ apiKey: process.env.GROQ_API_KEY })
   : null;
 
-const GROQ_MODEL = 'qwen/qwen3-27b';
+const GROQ_MODEL = 'qwen/qwen3.8-27b';
 const KB_CONFIDENCE_THRESHOLD = 0.55;
 
 // In-memory sessions
