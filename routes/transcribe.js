@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
+require('dotenv').config({ override: true });
 
 const SttProviderService = require('../services/stt/SttProviderService');
 

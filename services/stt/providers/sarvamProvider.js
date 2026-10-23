@@ -86,8 +86,11 @@ async function transcribe({ audioPath, language }) {
       filename: path.basename(finalAudioPath),
       contentType: 'audio/wav',
     });
-    formData.append('model', 'saarika:v2.5');
-    formData.append('language', sarvamLanguage);
+    formData.append('model', 'saaras:v4');
+    if (sarvamLanguage) {
+      formData.append('language_code', sarvamLanguage);
+    }
+    formData.append('mode', 'transcribe');
 
     const response = await axios.post(
       'https://api.sarvam.ai/speech-to-text',
@@ -95,7 +98,7 @@ async function transcribe({ audioPath, language }) {
       {
         headers: {
           ...formData.getHeaders(),
-          'api-subscription-key': process.env.SARVAM_API_KEY,
+          'api-subscription-key': (process.env.SARVAM_API_KEY || '').trim(),
         },
         timeout: 45000,
         maxContentLength: Infinity,

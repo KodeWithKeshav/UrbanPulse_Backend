@@ -84,7 +84,7 @@ router.get('/complaints/priority-queue', async (req, res) => {
     // (database/add_language_column_to_complaints.sql).
     const geometryReady = await geometryColumnsAvailable(supabase);
     const languageReady = await languageColumnAvailable(supabase);
-    const baseColumns = 'id, title, description, category, status, priority_score, location_address, created_at, user_id, text_authenticity_score, content_flagged, content_flag_reason, verification_status';
+    const baseColumns = 'id, title, description, category, status, priority_score, location_address, created_at, user_id, verification_status, image_urls, vote_count';
     const geometryColumns = 'estimated_width_cm, estimated_length_cm, estimated_area_cm2, estimated_depth_cm, geometry_confidence, geometry_status';
 
     const selectColumns = [baseColumns, geometryReady ? geometryColumns : null, languageReady ? 'language' : null]
@@ -95,14 +95,6 @@ router.get('/complaints/priority-queue', async (req, res) => {
     let complaintsQuery = supabase
       .from('complaints')
       .select(selectColumns);
-
-    // Complaints the model-based authenticity check flagged for human
-    // review (see services/TextAuthenticityService.js
-    // analyzeTextAuthenticityBlended) - submission already succeeded for
-    // these, they just need an admin look.
-    if (flagged === 'true') {
-      complaintsQuery = complaintsQuery.eq('content_flagged', true);
-    }
 
     // Add search functionality
     if (search && search.trim()) {
